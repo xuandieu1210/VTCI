@@ -1,0 +1,152 @@
+<%- include('../../partials/header') %>
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4>Chi tiết hộ gia đình</h4>
+        <div>
+            <a href="/ho-gia-dinh/<%= ho.id %>/edit" class="btn btn-warning me-2">Sửa</a>
+            <a href="/ho-gia-dinh" class="btn btn-secondary">Quay lại</a>
+        </div>
+    </div>
+
+    <% if (error) { %>
+        <div class="alert alert-danger"><%= error %></div>
+    <% } %>
+
+    <% if (ho) { %>
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header"><h5>Thông tin hộ</h5></div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-2"><strong>Mã hộ:</strong> <%= ho.ma_ho || '' %></div>
+                            <div class="col-md-6 mb-2"><strong>Tên chủ hộ:</strong> <%= ho.ten_chu_ho || '' %></div>
+                            <div class="col-md-6 mb-2"><strong>CMND/CCCD:</strong> <%= ho.so_cmnd || '' %></div>
+                            <div class="col-md-6 mb-2"><strong>Ngày sinh:</strong> <%= ho.ngay_sinh ? new Date(ho.ngay_sinh).toLocaleDateString('vi-VN') : '' %></div>
+                            <div class="col-md-6 mb-2"><strong>Giới tính:</strong> <%= ho.gioi_tinh || '' %></div>
+                            <div class="col-md-6 mb-2"><strong>Xã:</strong> <%= ho.ten_xa || '' %></div>
+                            <div class="col-md-6 mb-2"><strong>Loại đối tượng:</strong> <%= ho.ten_loai_doi_tuong || '' %></div>
+                            <div class="col-md-6 mb-2"><strong>VNPT khu vực:</strong> <%= ho.vnpt_khu_vuc_id || '' %></div>
+                            <div class="col-md-12 mb-2"><strong>Địa chỉ chi tiết:</strong> <%= ho.dia_chi_chi_tiet || '' %></div>
+                            <div class="col-md-12 mb-2"><strong>Ghi chú:</strong> <%= ho.ghi_chu || '' %></div>
+                            <% if (String(ho.trang_thai_ho_so || '') === 'tu_choi') { %>
+                                <div class="col-md-12 mb-2">
+                                    <strong>Trạng thái hồ sơ:</strong> <span class="badge bg-danger">Từ chối</span>
+                                </div>
+                                <div class="col-md-12 mb-2">
+                                    <strong>Lý do từ chối:</strong>
+                                    <div class="alert alert-danger mt-2 mb-0"><%= ho.ly_do_tu_choi || 'Không có lý do' %></div>
+                                </div>
+                            <% } %>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header"><h5>Thành viên trong hộ</h5></div>
+                    <div class="card-body">
+                        <% if (ho.thanh_vien && ho.thanh_vien.length) { %>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>Họ tên</th>
+                                            <th>CMND</th>
+                                            <th>Quan hệ</th>
+                                            <th>Dùng dịch vụ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% ho.thanh_vien.forEach(tv => { %>
+                                            <tr>
+                                                <td><%= tv.ho_ten || '' %></td>
+                                                <td><%= tv.so_cmnd || '' %></td>
+                                                <td><%= tv.quan_he_chu_ho || '' %></td>
+                                                <td><%= tv.dung_dich_vu ? 'Có' : 'Không' %></td>
+                                            </tr>
+                                        <% }) %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <% } else { %>
+                            <p class="text-muted mb-0">Chưa có thành viên nào.</p>
+                        <% } %>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header"><h5>Thông tin thuê bao</h5></div>
+                    <div class="card-body">
+                        <% if (ho.thue_bao && ho.thue_bao.length) { %>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Số thuê bao</th>
+                                            <th>Tên chủ thuê bao</th>
+                                            <th>CMND</th>
+                                            <th>Loại dịch vụ</th>
+                                            <th>Trạng thái</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% ho.thue_bao.forEach(tb => { %>
+                                            <tr>
+                                                <td><%= tb.so_thue_bao || '' %></td>
+                                                <td><%= tb.ten_chu_thue_bao || '' %></td>
+                                                <td><%= tb.cmnd_chu_thue_bao || '' %></td>
+                                                <td><%= tb.ten_dich_vu || tb.ma_dich_vu || '' %></td>
+                                                <td><%= tb.trang_thai_dich_vu || '' %></td>
+                                            </tr>
+                                        <% }) %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <% } else { %>
+                            <p class="text-muted mb-0">Chưa có thuê bao nào.</p>
+                        <% } %>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header"><h5>Hồ sơ lưu trữ</h5></div>
+                    <div class="card-body">
+                        <% if (ho.ho_so && ho.ho_so.length) { %>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Loại hồ sơ</th>
+                                            <th>Năm</th>
+                                            <th>File</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% ho.ho_so.forEach(file => { %>
+                                            <tr>
+                                                <td><%= file.loai_ho_so || '' %></td>
+                                                <td><%= file.nam_ho_so || '' %></td>
+                                                <td>
+                                                    <a href="/api/ho-so/download/<%= file.id %>" target="_blank" class="btn btn-sm btn-outline-primary">Tải xuống</a>
+                                                </td>
+                                            </tr>
+                                        <% }) %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <% } else { %>
+                            <p class="text-muted mb-0">Chưa có hồ sơ nào.</p>
+                        <% } %>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <% } %>
+</div>
+<%- include('../../partials/footer') %>

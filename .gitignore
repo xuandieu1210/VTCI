@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Uploads
+uploads/
+exports/
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+build/
+*.zip
+*.tar.gz
+
+# Database
+*.sqlite
+*.db

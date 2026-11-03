@@ -1,0 +1,88 @@
+<%- include('../partials/header') %>
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted">Tổng cảnh báo</div>
+                <h3 class="mb-0"><%= stats.tong || 0 %></h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted">Mới</div>
+                <h3 class="mb-0"><%= (stats.byTrangThai || []).find(x => x.trang_thai === 'moi')?.so_luong || 0 %></h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted">Đang xử lý</div>
+                <h3 class="mb-0"><%= (stats.byTrangThai || []).find(x => x.trang_thai === 'dang_xu_ly')?.so_luong || 0 %></h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted">Đã đóng</div>
+                <h3 class="mb-0"><%= (stats.byTrangThai || []).find(x => x.trang_thai === 'da_dong')?.so_luong || 0 %></h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Danh sách cảnh báo</h5>
+        <button class="btn btn-primary btn-sm" onclick="scanWarnings()">Kiểm tra tự động</button>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Loại</th>
+                        <th>Mô tả</th>
+                        <th>Độ ưu tiên</th>
+                        <th>Trạng thái</th>
+                        <th>Ngày phát hiện</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% if (data && data.length > 0) { %>
+                        <% data.forEach(item => { %>
+                            <tr>
+                                <td><%= item.loai_canh_bao %></td>
+                                <td><%= item.mo_ta %></td>
+                                <td><span class="badge bg-warning text-dark"><%= item.do_uu_tien %></span></td>
+                                <td><span class="badge <%= item.trang_thai === 'da_dong' ? 'bg-secondary' : item.trang_thai === 'da_xu_ly' ? 'bg-success' : 'bg-info' %>"><%= item.trang_thai %></span></td>
+                                <td><%= item.ngay_phat_hien ? new Date(item.ngay_phat_hien).toLocaleDateString('vi-VN') : '-' %></td>
+                            </tr>
+                        <% }) %>
+                    <% } else { %>
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">Chưa có cảnh báo nào</td>
+                        </tr>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+async function scanWarnings() {
+    const response = await fetch('/api/canh-bao/kiem-tra-tu-dong', { method: 'POST' });
+    const result = await response.json();
+    if (result.success) {
+        alert(result.message + ' (' + (result.data?.total || 0) + ')');
+        location.reload();
+    } else {
+        alert(result.message || 'Loi');
+    }
+}
+</script>
+<%- include('../partials/footer') %>

@@ -1,0 +1,150 @@
+<%- include('../partials/header') %>
+<div class="card">
+    <div class="card-header"><h5>Import du lieu tu Excel</h5></div>
+    <div class="card-body">
+        <div id="formMessage" class="alert d-none"></div>
+        <div id="importSummary" class="alert d-none"></div>
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i> Tai file mau de biet dinh dang, sau do upload file Excel cua ban.
+        </div>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <a href="/api/import/template" class="btn btn-success">
+                    <i class="fas fa-download"></i> Tai file mau
+                </a>
+            </div>
+            <div class="col-md-6">
+                <form id="importForm" enctype="multipart/form-data">
+                    <div class="input-group">
+                        <input type="file" name="file" id="importFile" class="form-control" accept=".xlsx,.xls,.csv" required>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-upload"></i> Import
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="errorSection" class="mt-4 d-none">
+            <h6 class="mb-2">Danh sach dong can kiem tra</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 90px;">Dong</th>
+                            <th style="width: 140px;">Trang thai</th>
+                            <th>Noi dung</th>
+                        </tr>
+                    </thead>
+                    <tbody id="errorTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const importForm = document.getElementById('importForm');
+const formMessage = document.getElementById('formMessage');
+const importSummary = document.getElementById('importSummary');
+const errorSection = document.getElementById('errorSection');
+const errorTableBody = document.getElementById('errorTableBody');
+
+importForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const fileInput = document.getElementById('importFile');
+    if (!fileInput.files.length) {
+        showMessage('Vui long chon file Excel', 'danger');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    showMessage('Dang import, vui long doi...', 'info');
+    hideImportDetails();
+
+    try {
+        const response = await fetch('/api/import/excel', {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin'
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showMessage(result.message || 'Import thanh cong', 'success');
+            renderImportDetails(result.data);
+            importForm.reset();
+        } else {
+            showMessage(result.message || 'Import that bai', 'danger');
+            hideImportDetails();
+        }
+    } catch (error) {
+        showMessage('Loi ket noi server: ' + error.message, 'danger');
+        hideImportDetails();
+    }
+});
+
+function showMessage(message, type) {
+    formMessage.className = 'alert alert-' + type;
+    formMessage.textContent = message;
+    formMessage.classList.remove('d-none');
+}
+
+function hideImportDetails() {
+    importSummary.className = 'alert d-none';
+    importSummary.textContent = '';
+    errorSection.classList.add('d-none');
+    errorTableBody.innerHTML = '';
+}
+
+function renderImportDetails(data) {
+    if (!data || typeof data !== 'object') {
+        hideImportDetails();
+        return;
+    }
+
+    const success = Number(data.success || 0);
+    const failed = Number(data.failed || 0);
+    const errors = Array.isArray(data.errors) ? data.errors : [];
+
+    importSummary.className = 'alert alert-secondary';
+    importSummary.textContent = 'Ket qua: ' + success + ' dong thanh cong, ' + failed + ' dong that bai.';
+    importSummary.classList.remove('d-none');
+
+    if (!errors.length) {
+        errorSection.classList.add('d-none');
+        errorTableBody.innerHTML = '';
+        return;
+    }
+
+    const rows = errors.map((item) => {
+        const rowNum = item.row || '';
+        const reason = item.error || item.warning || 'Khong ro ly do';
+        const isError = Boolean(item.error);
+        const status = isError
+            ? '<span class="badge bg-danger">That bai</span>'
+            : '<span class="badge bg-warning text-dark">Canh bao</span>';
+
+        return '<tr>' +
+            '<td>' + rowNum + '</td>' +
+            '<td>' + status + '</td>' +
+            '<td>' + escapeHtml(String(reason)) + '</td>' +
+        '</tr>';
+    });
+
+    errorTableBody.innerHTML = rows.join('');
+    errorSection.classList.remove('d-none');
+}
+
+function escapeHtml(value) {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+</script>
+<%- include('../partials/footer') %>

@@ -1,0 +1,524 @@
+<% const documentTypes = [
+    { value: 'giay_chung_nhan_ho_ngheo_can_ngheo', label: 'Giấy chứng nhận hộ nghèo/cận nghèo' },
+    { value: 'don_dang_ky_su_dung', label: 'Đơn đăng ký sử dụng' },
+    { value: 'hop_dong_cung_cap_dv', label: 'Hợp đồng cung cấp DV' },
+    { value: 'giay_cccd', label: 'Giấy CCCD' },
+    { value: 'giay_cam_ket', label: 'Giấy cam kết' }
+];
+const currentYear = new Date().getFullYear();
+const years = Array.from({ length: 7 }, (_, i) => currentYear - 3 + i);
+%>
+<%- include('../../partials/header') %>
+<div class="card">
+    <div class="card-header"><h5>Them moi ho gia dinh</h5></div>
+    <div class="card-body">
+        <% if (error) { %>
+            <div class="alert alert-danger"><%= error %></div>
+        <% } %>
+        <form method="POST">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Ten chu ho <span class="text-danger">*</span></label>
+                    <input type="text" name="ten_chu_ho" class="form-control" required value="<%= oldData.ten_chu_ho || '' %>">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">So CMND/CCCD <span class="text-danger">*</span></label>
+                    <input type="text" name="so_cmnd" class="form-control" required maxlength="12" inputmode="numeric" pattern="[0-9]{9,12}" value="<%= oldData.so_cmnd || '' %>">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Xa <span class="text-danger">*</span></label>
+                    <select name="xa_id" id="xaSelect" class="form-control" required>
+                        <option value="">-- Chon xa --</option>
+                        <% xaList.forEach(x => { %>
+                            <option value="<%= x.id %>" <%= oldData.xa_id == x.id ? 'selected' : '' %>><%= x.ten_xa %></option>
+                        <% }) %>
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">VNPT khu vực <span class="text-danger">*</span></label>
+                    <% const normalizedUserRole = String(user && user.vai_tro || '').trim().toLowerCase().replace(/[^a-z0-9]/g, ''); %>
+                    <% if (user && normalizedUserRole === 'vnptkhuvuc') { %>
+                        <input type="text" class="form-control" value="<%= (vnptKhuVucList || []).find(v => String(v.id) === String(user.vnpt_khu_vuc_id))?.ten_khu_vuc || '' %>" readonly>
+                        <input type="hidden" name="vnpt_khu_vuc_id" value="<%= user.vnpt_khu_vuc_id || '' %>">
+                    <% } else { %>
+                        <select name="vnpt_khu_vuc_id" class="form-control" required>
+                            <option value="">-- Chon khu vuc --</option>
+                            <% (vnptKhuVucList || []).forEach(v => { %>
+                                <option value="<%= v.id %>" <%= String(oldData.vnpt_khu_vuc_id || '') === String(v.id) ? 'selected' : '' %>><%= v.ten_khu_vuc %></option>
+                            <% }) %>
+                        </select>
+                    <% } %>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Ngay sinh</label>
+                    <input type="date" name="ngay_sinh" class="form-control" value="<%= oldData.ngay_sinh || '' %>">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Gioi tinh</label>
+                    <select name="gioi_tinh" class="form-control">
+                        <option value="">-- Chon --</option>
+                        <option value="nam" <%= oldData.gioi_tinh === 'nam' ? 'selected' : '' %>>Nam</option>
+                        <option value="nu" <%= oldData.gioi_tinh === 'nu' ? 'selected' : '' %>>Nu</option>
+                        <option value="khac" <%= oldData.gioi_tinh === 'khac' ? 'selected' : '' %>>Khac</option>
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Loai doi tuong</label>
+                    <select name="loai_doi_tuong_id" class="form-control">
+                        <option value="">-- Chon loai --</option>
+                        <% loaiList.forEach(l => { %>
+                            <option value="<%= l.id %>" <%= oldData.loai_doi_tuong_id == l.id ? 'selected' : '' %>><%= l.ten_loai %></option>
+                        <% }) %>
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Trang thai ho</label>
+                    <select name="trang_thai_ho" class="form-control">
+                        <option value="dang_hoat_dong" <%= oldData.trang_thai_ho === 'dang_hoat_dong' ? 'selected' : '' %>>Dang hoat dong</option>
+                        <option value="ngung_hoat_dong" <%= oldData.trang_thai_ho === 'ngung_hoat_dong' ? 'selected' : '' %>>Ngung hoat dong</option>
+                        <option value="cho_kich_hoat" <%= oldData.trang_thai_ho === 'cho_kich_hoat' ? 'selected' : '' %>>Cho kich hoat</option>
+                    </select>
+                </div>
+                <div class="col-12 mb-3">
+                    <label class="form-label">Dia chi chi tiet</label>
+                    <textarea name="dia_chi_chi_tiet" class="form-control" rows="2"><%= oldData.dia_chi_chi_tiet || '' %></textarea>
+                </div>
+                <div class="col-12 mb-3">
+                    <label class="form-label">Ghi chu</label>
+                    <textarea name="ghi_chu" class="form-control" rows="3"><%= oldData.ghi_chu || '' %></textarea>
+                </div>
+            </div>
+
+            <div class="card mt-4 mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Người dùng dịch vụ</h5>
+                </div>
+                <div class="card-body">
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="nguoi_dung_dich_vu" value="chu_ho" id="nguoiDungChuHo" checked>
+                        <label class="form-check-label" for="nguoiDungChuHo">Chủ hộ dùng</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="nguoi_dung_dich_vu" value="thanh_vien" id="nguoiDungThanhVien">
+                        <label class="form-check-label" for="nguoiDungThanhVien">Thành viên dùng</label>
+                    </div>
+                    <input type="hidden" name="chu_ho_dung_dich_vu" value="1" id="chuHoDungDichVu">
+                </div>
+            </div>
+
+            <div class="card mt-4 mb-4" id="memberSection" style="display:none;">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Thành viên trong hộ</h5>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="addMemberBtn">+ Thêm thành viên</button>
+                </div>
+                <div class="card-body">
+                    <div id="memberList" class="row g-3"></div>
+                </div>
+            </div>
+
+            <div class="card mt-4 mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Thông tin thuê bao</h5>
+                </div>
+                <div class="card-body">
+                    <div id="serviceList" class="row g-3"></div>
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-header"><h5>Hồ sơ lưu trữ</h5></div>
+                <div class="card-body">
+                    <div class="row">
+                        <% documentTypes.forEach(docType => { %>
+                            <div class="col-md-6 mb-4">
+                                <label class="form-label fw-bold"><%= docType.label %></label>
+                                <div class="mb-2">
+                                    <label class="form-label small">Năm hồ sơ</label>
+                                    <select class="form-control form-select document-year-select" data-doc-type="<%= docType.value %>">
+                                        <% years.forEach(year => { %>
+                                            <option value="<%= year %>" <%= year === currentYear ? 'selected' : '' %>><%= year %></option>
+                                        <% }); %>
+                                    </select>
+                                </div>
+                                <input type="file" class="form-control document-file-input" data-doc-type="<%= docType.value %>" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                            </div>
+                        <% }); %>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Luu</button>
+            <a href="/ho-gia-dinh" class="btn btn-secondary">Quay lai</a>
+        </form>
+    </div>
+</div>
+<script>
+const memberList = document.getElementById('memberList');
+const serviceList = document.getElementById('serviceList');
+const householdForm = document.querySelector('form');
+const memberIndex = { value: 0 };
+const serviceIndex = { value: 0 };
+
+const serviceOwnerModeInputs = document.querySelectorAll('input[name="nguoi_dung_dich_vu"]');
+const memberSection = document.getElementById('memberSection');
+const chuHoDungDichVuCheckbox = document.getElementById('chuHoDungDichVu');
+
+function syncServiceOwnerMode() {
+    const chosenMode = document.querySelector('input[name="nguoi_dung_dich_vu"]:checked')?.value || 'chu_ho';
+    const isHouseholdOwner = chosenMode === 'chu_ho';
+    if (memberSection) {
+        memberSection.style.display = isHouseholdOwner ? 'none' : 'block';
+    }
+    if (chuHoDungDichVuCheckbox) {
+        chuHoDungDichVuCheckbox.value = isHouseholdOwner ? '1' : '0';
+    }
+    document.querySelectorAll('.member-target-select').forEach((select) => {
+        if (isHouseholdOwner) {
+            select.value = '__chu_ho__';
+            const holderField = select.closest('.service-row')?.querySelector('input[name$="[ten_chu_thue_bao]"]');
+            const cmndField = select.closest('.service-row')?.querySelector('input[name$="[cmnd_chu_thue_bao]"]');
+            const ownerName = document.querySelector('input[name="ten_chu_ho"]');
+            const ownerCmnd = document.querySelector('input[name="so_cmnd"]');
+            if (holderField) holderField.value = ownerName ? ownerName.value : '';
+            if (cmndField) cmndField.value = ownerCmnd ? ownerCmnd.value : '';
+        }
+    });
+}
+
+serviceOwnerModeInputs.forEach((input) => {
+    input.addEventListener('change', () => {
+        syncServiceOwnerMode();
+        syncServiceOwnerFieldsFromTop();
+    });
+});
+
+document.querySelector('input[name="ten_chu_ho"]')?.addEventListener('input', syncServiceOwnerFieldsFromTop);
+document.querySelector('input[name="so_cmnd"]')?.addEventListener('input', syncServiceOwnerFieldsFromTop);
+
+document.addEventListener('input', function (event) {
+    const target = event.target;
+    if (target && target.name && target.name.endsWith('[ho_ten)')) return;
+    if (target && target.name && target.name.includes('[ho_ten]')) {
+        syncServiceOwnerFieldsFromTop();
+    }
+    if (target && target.name && target.name.includes('[so_cmnd]')) {
+        syncServiceOwnerFieldsFromTop();
+    }
+});
+
+function buildNestedPayload(formData) {
+    const payload = {};
+    for (const [key, value] of formData.entries()) {
+        if (key.startsWith('thanh_vien[')) {
+            const match = key.match(/^thanh_vien\[(\d+)\]\[([^\]]+)\]$/);
+            if (!match) continue;
+            const [, index, field] = match;
+            if (!payload.thanh_vien) payload.thanh_vien = [];
+            if (!payload.thanh_vien[index]) payload.thanh_vien[index] = {};
+            payload.thanh_vien[index][field] = value;
+            continue;
+        }
+
+        if (key.startsWith('thue_bao[')) {
+            const match = key.match(/^thue_bao\[(\d+)\]\[([^\]]+)\]$/);
+            if (!match) continue;
+            const [, index, field] = match;
+            if (!payload.thue_bao) payload.thue_bao = [];
+            if (!payload.thue_bao[index]) payload.thue_bao[index] = {};
+            payload.thue_bao[index][field] = value;
+            continue;
+        }
+
+        payload[key] = value;
+    }
+    return payload;
+}
+
+function buildMemberRow(index) {
+    return `
+        <div class="col-12 member-row border rounded p-3">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Họ tên</label>
+                    <input type="text" name="thanh_vien[${index}][ho_ten]" class="form-control">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">CMND</label>
+                    <input type="text" name="thanh_vien[${index}][so_cmnd]" class="form-control" maxlength="12" inputmode="numeric" pattern="[0-9]{9,12}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Quan hệ chủ hộ</label>
+                    <input type="text" name="thanh_vien[${index}][quan_he_chu_ho]" class="form-control" placeholder="Ví dụ: Vợ/chồng">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Giới tính</label>
+                    <select name="thanh_vien[${index}][gioi_tinh]" class="form-control">
+                        <option value="">-- Chọn --</option>
+                        <option value="nam">Nam</option>
+                        <option value="nu">Nữ</option>
+                        <option value="khac">Khác</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">SĐT</label>
+                    <input type="text" name="thanh_vien[${index}][so_dien_thoai]" class="form-control">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Nghề nghiệp</label>
+                    <input type="text" name="thanh_vien[${index}][nghe_nghiep]" class="form-control">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Ngày sinh</label>
+                    <input type="date" name="thanh_vien[${index}][ngay_sinh]" class="form-control">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="thanh_vien[${index}][email]" class="form-control">
+                </div>
+                <div class="col-md-12">
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <label class="form-check-label me-3">Dùng dịch vụ</label>
+                        <input type="checkbox" name="thanh_vien[${index}][dung_dich_vu]" value="1" class="form-check-input">
+                        <label class="form-check-label me-3">Là chủ hộ dùng</label>
+                        <input type="checkbox" name="thanh_vien[${index}][la_chu_ho_dung_dich_vu]" value="1" class="form-check-input">
+                        <button type="button" class="btn btn-sm btn-outline-danger ms-auto remove-member-btn">Xóa</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function addMemberRow() {
+    const row = document.createElement('div');
+    row.innerHTML = buildMemberRow(memberIndex.value++);
+    const memberRow = row.firstElementChild;
+    memberRow.dataset.memberKey = String(memberIndex.value - 1);
+    memberList.appendChild(memberRow);
+    memberRow.querySelector('.remove-member-btn').addEventListener('click', function () {
+        this.closest('.member-row').remove();
+        refreshMemberOptions();
+    });
+    refreshMemberOptions();
+}
+
+function getMemberOptions() {
+    const memberRows = Array.from(document.querySelectorAll('.member-row'));
+    return memberRows.map((row) => {
+        const hoTenInput = row.querySelector('input[name$="[ho_ten]"]');
+        const cmndInput = row.querySelector('input[name$="[so_cmnd]"]');
+        const relationInput = row.querySelector('input[name$="[quan_he_chu_ho]"]');
+        const key = row.dataset.memberKey || '';
+        const hoTen = hoTenInput ? hoTenInput.value.trim() : '';
+        const relation = relationInput ? relationInput.value.trim() : '';
+        const label = [hoTen || 'Thành viên', relation ? `(${relation})` : ''].join(' ');
+        return { key, label, hoTen, cmnd: cmndInput ? cmndInput.value.trim() : '' };
+    }).filter(item => item.key);
+}
+
+function refreshMemberOptions() {
+    const memberOptions = getMemberOptions();
+    document.querySelectorAll('.member-target-select').forEach((select) => {
+        const previousValue = select.value;
+        const optionsHtml = '<option value="__chu_ho__">Chủ hộ</option>' + memberOptions.map(item => `<option value="${item.key}">${item.label}</option>`).join('');
+        select.innerHTML = optionsHtml;
+        if (previousValue) {
+            select.value = previousValue;
+        } else if (document.querySelector('input[name="nguoi_dung_dich_vu"]:checked')?.value === 'chu_ho') {
+            select.value = '__chu_ho__';
+        } else if (memberOptions.length > 0) {
+            select.value = memberOptions[0].key;
+        }
+    });
+}
+
+function syncServiceOwnerFieldsFromTop() {
+    const chosenMode = document.querySelector('input[name="nguoi_dung_dich_vu"]:checked')?.value || 'chu_ho';
+    const ownerNameInput = document.querySelector('input[name="ten_chu_ho"]');
+    const ownerCmndInput = document.querySelector('input[name="so_cmnd"]');
+    const memberRows = Array.from(document.querySelectorAll('.member-row'));
+    const chosenMemberRow = memberRows.find(row => row.dataset.memberKey && row.dataset.memberKey !== '') || memberRows[0];
+    const chosenMemberName = chosenMemberRow?.querySelector('input[name$="[ho_ten]"]');
+    const chosenMemberCmnd = chosenMemberRow?.querySelector('input[name$="[so_cmnd]"]');
+
+    document.querySelectorAll('.service-row').forEach((row) => {
+        const hiddenRef = row.querySelector('.member-target-hidden');
+        const holderField = row.querySelector('input[name$="[ten_chu_thue_bao]"]');
+        const cmndField = row.querySelector('input[name$="[cmnd_chu_thue_bao]"]');
+        const memberSelect = row.querySelector('.member-target-select');
+
+        if (memberSelect) {
+            memberSelect.style.display = 'none';
+        }
+
+        let refValue = '__chu_ho__';
+        let nameValue = ownerNameInput ? ownerNameInput.value : '';
+        let cmndValue = ownerCmndInput ? ownerCmndInput.value : '';
+
+        if (chosenMode !== 'chu_ho' && chosenMemberRow) {
+            refValue = chosenMemberRow.dataset.memberKey || '__chu_ho__';
+            nameValue = chosenMemberName ? chosenMemberName.value : nameValue;
+            cmndValue = chosenMemberCmnd ? chosenMemberCmnd.value : cmndValue;
+        }
+
+        if (hiddenRef) hiddenRef.value = refValue;
+        if (memberSelect) memberSelect.value = refValue;
+        if (holderField) holderField.value = nameValue;
+        if (cmndField) cmndField.value = cmndValue;
+    });
+}
+
+function buildServiceRow(index) {
+    const loaiDichVuOptions = `<% loaiDichVuList.forEach(item => { %><option value="<%= item.id %>"><%= item.ten_dich_vu %></option><% }) %>`;
+    return `
+        <div class="col-12 service-row border rounded p-3">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Loại dịch vụ</label>
+                    <select name="thue_bao[${index}][loai_dich_vu_id]" class="form-control" required>
+                        <option value="">-- Chọn --</option>
+                        ${loaiDichVuOptions}
+                    </select>
+                </div>
+                <div class="col-md-3" style="display:none;">
+                    <label class="form-label">Thuộc chủ hộ / thành viên</label>
+                    <select name="thue_bao[${index}][thanh_vien_ref]" class="form-control member-target-select">
+                        <option value="__chu_ho__">Chủ hộ</option>
+                    </select>
+                    <input type="hidden" name="thue_bao[${index}][thanh_vien_ref]" class="member-target-hidden" value="__chu_ho__">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Số thuê bao</label>
+                    <input type="text" name="thue_bao[${index}][so_thue_bao]" class="form-control" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Tên chủ thuê bao</label>
+                    <input type="text" name="thue_bao[${index}][ten_chu_thue_bao]" class="form-control">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">CMND chủ thuê bao</label>
+                    <input type="text" name="thue_bao[${index}][cmnd_chu_thue_bao]" class="form-control" maxlength="12" inputmode="numeric" pattern="[0-9]{9,12}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Gói cước</label>
+                    <input type="text" name="thue_bao[${index}][goi_cuoc_dang_ky]" class="form-control">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Ngày đăng ký</label>
+                    <input type="date" name="thue_bao[${index}][ngay_dang_ky]" class="form-control">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Ngày kích hoạt</label>
+                    <input type="date" name="thue_bao[${index}][ngay_kich_hoat]" class="form-control">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Ngày hết hạn</label>
+                    <input type="date" name="thue_bao[${index}][ngay_het_han]" class="form-control">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Trạng thái</label>
+                    <select name="thue_bao[${index}][trang_thai_dich_vu]" class="form-control">
+                        <option value="cho_kich_hoat">Chờ kích hoạt</option>
+                        <option value="dang_hoat_dong">Đang hoạt động</option>
+                        <option value="tam_ngung">Tạm ngưng</option>
+                        <option value="da_huy">Đã hủy</option>
+                    </select>
+                </div>
+                <div class="col-md-9">
+                    <label class="form-label">Ghi chú</label>
+                    <input type="text" name="thue_bao[${index}][ghi_chu]" class="form-control">
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function addServiceRow() {
+    const row = document.createElement('div');
+    const currentIndex = serviceIndex.value++;
+    row.innerHTML = buildServiceRow(currentIndex);
+    const serviceRow = row.firstElementChild;
+    serviceList.appendChild(serviceRow);
+    const memberSelect = serviceRow.querySelector('.member-target-select');
+    const hiddenRef = serviceRow.querySelector('.member-target-hidden');
+    if (memberSelect) {
+        memberSelect.addEventListener('change', function () {
+            const selected = getMemberOptions().find(item => item.key === this.value);
+            const holderField = serviceRow.querySelector('input[name$="[ten_chu_thue_bao]"]');
+            const cmndField = serviceRow.querySelector('input[name$="[cmnd_chu_thue_bao]"]');
+            if (hiddenRef) hiddenRef.value = this.value;
+            if (this.value === '__chu_ho__') {
+                if (holderField) holderField.value = (document.querySelector('input[name="ten_chu_ho"]') || {}).value || '';
+                if (cmndField) cmndField.value = (document.querySelector('input[name="so_cmnd"]') || {}).value || '';
+                return;
+            }
+            if (selected) {
+                if (holderField) holderField.value = selected.hoTen || '';
+                if (cmndField) cmndField.value = selected.cmnd || '';
+            }
+        });
+    }
+    syncServiceOwnerFieldsFromTop();
+    refreshMemberOptions();
+}
+
+document.getElementById('addMemberBtn').addEventListener('click', addMemberRow);
+householdForm.addEventListener('submit', async function (event) {
+    event.preventDefault();
+
+    const formData = new FormData(householdForm);
+    const payload = buildNestedPayload(formData);
+
+    try {
+        const response = await fetch('/ho-gia-dinh/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.message || 'Tạo hộ thất bại');
+        }
+
+        const householdId = result.householdId || result.data?.id;
+        const uploadPromises = [];
+        document.querySelectorAll('.document-file-input').forEach(input => {
+            if (!input.files || !input.files[0]) return;
+            const docType = input.dataset.docType;
+            const yearSelect = document.querySelector('.document-year-select[data-doc-type="' + docType + '"]');
+            const formDataForUpload = new FormData();
+            formDataForUpload.append('ho_gia_dinh_id', householdId || '');
+            formDataForUpload.append('loai_ho_so', docType);
+            formDataForUpload.append('nam_ho_so', yearSelect ? yearSelect.value : new Date().getFullYear());
+            formDataForUpload.append('file', input.files[0]);
+            uploadPromises.push(fetch('/api/ho-so', {
+                method: 'POST',
+                body: formDataForUpload
+            }));
+        });
+
+        if (uploadPromises.length > 0) {
+            for (const uploadRequest of uploadPromises) {
+                const uploadResponse = await uploadRequest;
+                const uploadResult = await uploadResponse.json();
+                if (!uploadResponse.ok || !uploadResult.success) {
+                    throw new Error(uploadResult.message || 'Tải hồ sơ thất bại');
+                }
+            }
+        }
+
+        window.location.href = '/ho-gia-dinh?created=1';
+    } catch (error) {
+        alert(error.message || 'Tạo hộ thất bại');
+    }
+});
+addMemberRow();
+addServiceRow();
+syncServiceOwnerMode();
+</script>
+<%- include('../../partials/footer') %>

@@ -1,0 +1,123 @@
+<% 
+    const hasMenuPermission = (perm) => {
+        if (!user) return false;
+        if (user.vai_tro === 'admin' || user.vai_tro === 'manager' || user.vai_tro === 'staff') {
+            const perms = Array.isArray(user.quyen_chuc_nang) ? user.quyen_chuc_nang : [];
+            return perms.length === 0 || perms.includes(perm);
+        }
+        const perms = Array.isArray(user.quyen_chuc_nang) ? user.quyen_chuc_nang : [];
+        return perms.includes(perm);
+    };
+%>
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-menu">
+            <div class="menu-label">MENU CHÍNH</div>
+
+            <% if (hasMenuPermission('dashboard')) { %>
+                <a href="/" class="nav-link <%= title.includes('Dashboard') || title.toLowerCase().includes('dashboard') ? 'active' : '' %>">
+                    <i class="fas fa-chart-pie"></i> Dashboard
+                </a>
+            <% } %>
+
+            <% if (hasMenuPermission('ho_gia_dinh_xem')) { %>
+                <a href="/ho-gia-dinh" class="nav-link <%= title.toLowerCase().includes('ho gia dinh') || title.toLowerCase().includes('hộ gia đình') ? 'active' : '' %>">
+                    <i class="fas fa-users"></i> Hộ gia đình
+                    <span class="badge"><%= Number(householdCount || 0) %></span>
+                </a>
+            <% } %>
+
+            <% if (hasMenuPermission('danh_muc_xem')) { %>
+                <div class="menu-label" style="margin-top:15px;">DANH MỤC</div>
+
+                <a href="/danh-muc/xa" class="nav-link <%= title.toLowerCase().includes('xa') ? 'active' : '' %>">
+                    <i class="fas fa-map-marker-alt"></i> Xã / phường
+                </a>
+                <a href="/danh-muc/loai-doi-tuong" class="nav-link <%= title.toLowerCase().includes('loai doi tuong') ? 'active' : '' %>">
+                    <i class="fas fa-user-tag"></i> Loại đối tượng
+                </a>
+                <a href="/danh-muc/loai-dich-vu" class="nav-link <%= title.toLowerCase().includes('loai dich vu') ? 'active' : '' %>">
+                    <i class="fas fa-briefcase"></i> Loại dịch vụ
+                </a>
+                <a href="/danh-muc/vnpt-khu-vuc" class="nav-link <%= title.toLowerCase().includes('vnpt') || title.toLowerCase().includes('khu vuc') ? 'active' : '' %>">
+                    <i class="fas fa-network-wired"></i> VNPT khu vực
+                </a>
+            <% } %>
+
+            <% if (hasMenuPermission('quan_ly_user')) { %>
+                <a href="/users" class="nav-link <%= title.toLowerCase().includes('nguoi dung') || title.toLowerCase().includes('user') ? 'active' : '' %>">
+                    <i class="fas fa-user-shield"></i> Người dùng
+                </a>
+            <% } %>
+
+            <% if (hasMenuPermission('duyet_ho_so')) { %>
+                <a href="/duyet-ho-so" class="nav-link <%= title.toLowerCase().includes('duyet ho so') || title.toLowerCase().includes('duyệt hồ sơ') ? 'active' : '' %>">
+                    <i class="fas fa-clipboard-check"></i> Duyệt hồ sơ
+                </a>
+            <% } %>
+
+            <% if (hasMenuPermission('import_excel') || hasMenuPermission('export_excel')) { %>
+                <div class="menu-label" style="margin-top:15px;">TIỆN ÍCH</div>
+            <% } %>
+
+            <% if (hasMenuPermission('import_excel')) { %>
+                <a href="/import" class="nav-link <%= title.toLowerCase().includes('import') ? 'active' : '' %>">
+                    <i class="fas fa-file-import"></i> Import dữ liệu
+                </a>
+            <% } %>
+
+            <% if (hasMenuPermission('export_excel')) { %>
+                <a href="/bao-cao" class="nav-link <%= title.toLowerCase().includes('bao cao') || title.toLowerCase().includes('báo cáo') ? 'active' : '' %>">
+                    <i class="fas fa-chart-bar"></i> Báo cáo thống kê
+                </a>
+            <% } %>
+
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <div class="avatar">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div>
+                    <div class="user-name"><%= user ? user.ho_ten : 'Guest' %></div>
+                    <div class="user-role"><%= user ? user.vai_tro : 'Chưa đăng nhập' %></div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <header class="top-header">
+            <div>
+                <button class="sidebar-toggle" id="sidebarToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <span class="page-title">
+                    <%= title %>
+                    <small>Quản lý viễn thông công ích</small>
+                </span>
+            </div>
+            <div class="header-actions">
+                <a href="/logout" class="btn-logout">
+                    <i class="fas fa-sign-out-alt"></i> Đăng xuất
+                </a>
+            </div>
+        </header>
+
+        <div class="page-content">

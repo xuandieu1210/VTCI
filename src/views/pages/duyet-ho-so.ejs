@@ -1,0 +1,314 @@
+<%- include('../partials/header') %>
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="mb-1">Duyệt hồ sơ</h4>
+            <small class="text-muted">Admin xem thông tin hộ và hồ sơ để duyệt</small>
+        </div>
+        <% if (data && data.length) { %>
+            <div class="d-flex gap-2">
+                <form method="POST" action="/duyet-ho-so/approve" id="approveForm">
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check"></i> Duyệt đã chọn
+                    </button>
+                </form>
+                <form method="POST" action="/duyet-ho-so/reject" id="rejectForm">
+                    <input type="hidden" name="ly_do_tu_choi" id="rejectReason">
+                    <button type="button" id="rejectButton" class="btn btn-danger">
+                        <i class="fas fa-times"></i> Từ chối đã chọn
+                    </button>
+                </form>
+            </div>
+        <% } %>
+    </div>
+
+    <% if (message) { %>
+        <div class="alert alert-success"><%= message %></div>
+    <% } %>
+
+    <% if (error) { %>
+        <div class="alert alert-danger"><%= error %></div>
+    <% } %>
+
+    <% const safePagination = typeof pagination !== 'undefined' ? pagination : {}; %>
+    <% const filterQuery = 'limit=' + encodeURIComponent(safePagination.limit || 20) + '&search=' + encodeURIComponent(search || '') + '&xa_id=' + encodeURIComponent(xaId || '') + '&trang_thai_ho_so=' + encodeURIComponent(trangThaiHoSo || ''); %>
+    <form method="GET" action="/duyet-ho-so" class="row g-2 align-items-end mb-3">
+        <div class="col-12 col-md-5 col-lg-4">
+            <label for="approvalSearch" class="form-label">Tìm kiếm</label>
+            <input type="search" id="approvalSearch" name="search" class="form-control" value="<%= search || '' %>" placeholder="Mã hộ, tên chủ hộ, CCCD">
+        </div>
+        <div class="col-12 col-md-3 col-lg-3">
+            <label for="approvalXa" class="form-label">Xã</label>
+            <select id="approvalXa" name="xa_id" class="form-select">
+                <option value="">Tất cả xã</option>
+                <% (xaList || []).forEach(function(xa) { %>
+                    <option value="<%= xa.id %>" <%= String(xaId || '') === String(xa.id) ? 'selected' : '' %>><%= xa.ten_xa %></option>
+                <% }); %>
+            </select>
+        </div>
+        <div class="col-12 col-md-3 col-lg-3">
+            <label for="approvalStatus" class="form-label">Trạng thái hồ sơ</label>
+            <select id="approvalStatus" name="trang_thai_ho_so" class="form-select">
+                <option value="">Chưa duyệt</option>
+                <% (statusOptions || []).forEach(function(option) { %>
+                    <option value="<%= option.value %>" <%= trangThaiHoSo === option.value ? 'selected' : '' %>><%= option.label %></option>
+                <% }); %>
+            </select>
+        </div>
+        <div class="col-12 col-md-1 d-flex gap-2">
+            <button type="submit" class="btn btn-primary flex-grow-1" title="Tìm kiếm" aria-label="Tìm kiếm">
+                <i class="fas fa-search"></i>
+            </button>
+            <a href="/duyet-ho-so" class="btn btn-outline-secondary" title="Xóa bộ lọc" aria-label="Xóa bộ lọc">
+                <i class="fas fa-undo"></i>
+            </a>
+        </div>
+    </form>
+
+    <% if (!data || !data.length) { %>
+        <div class="card">
+            <div class="card-body text-center text-muted py-5">
+                Không tìm thấy hộ gia đình phù hợp với điều kiện lọc.
+            </div>
+        </div>
+    <% } else { %>
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 50px;">
+                                    <input type="checkbox" id="selectAllHouseholds" aria-label="Chọn tất cả" />
+                                </th>
+                                <th>Mã hộ</th>
+                                <th>Chủ hộ</th>
+                                <th>CCCD</th>
+                                <th>Xã</th>
+                                <th>Hồ sơ</th>
+                                <th>Trạng thái</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% data.forEach(function(ho) { %>
+                                <% var docStatus = ho.trang_thai_ho_so || 'chua_co'; %>
+                                <tr class="<%= docStatus === 'can_bo_sung' ? 'table-warning' : '' %>">
+                                    <td>
+                                        <input type="checkbox" name="selectedIds" value="<%= ho.id %>" class="household-checkbox" />
+                                    </td>
+                                    <td><%= ho.ma_ho || '' %></td>
+                                    <td><%= ho.ten_chu_ho || '' %></td>
+                                    <td><%= ho.so_cmnd || '' %></td>
+                                    <td><%= ho.ten_xa || '' %></td>
+                                    <td>
+                                        <% if (ho.ho_so && ho.ho_so.length) { %>
+                                            <ul class="mb-0 ps-3">
+                                                <% ho.ho_so.forEach(function(file) { %>
+                                                    <li>
+                                                        <%= file.loai_ho_so || 'Hồ sơ' %>
+                                                        <% if (file.nam_ho_so) { %>
+                                                            (<%= file.nam_ho_so %>)
+                                                        <% } %>
+                                                        <a href="/api/ho-so/download/<%= file.id %>" target="_blank" class="ms-2 text-primary">Tải</a>
+                                                    </li>
+                                                <% }); %>
+                                            </ul>
+                                        <% } else { %>
+                                            <span class="text-muted">Chưa có hồ sơ</span>
+                                        <% } %>
+                                    </td>
+                                    <td>
+                                        <% if (docStatus === 'day_du') { %>
+                                            <span class="badge bg-success">Đầy đủ</span>
+                                        <% } else if (docStatus === 'thieu') { %>
+                                            <span class="badge bg-warning text-dark">Thiếu</span>
+                                        <% } else if (docStatus === 'can_bo_sung') { %>
+                                            <span class="badge bg-warning text-dark">Đã chỉnh sửa</span>
+                                        <% } else if (docStatus === 'het_han') { %>
+                                            <span class="badge bg-secondary">Hết hạn</span>
+                                        <% } else if (docStatus === 'tu_choi') { %>
+                                            <span class="badge bg-danger">Từ chối</span>
+                                        <% } else { %>
+                                            <span class="badge bg-light text-dark">Chưa có</span>
+                                        <% } %>
+                                    </td>
+                                    <td>
+                                        <a href="/ho-gia-dinh/<%= ho.id %>" class="btn btn-sm btn-info">Xem</a>
+                                    </td>
+                                </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <% if (safePagination && safePagination.totalPages > 1) { %>
+            <%
+                const currentPage = Number(safePagination.page || 1);
+                const totalPages = Number(safePagination.totalPages || 1);
+                const pageItems = [];
+
+                if (totalPages <= 7) {
+                    for (let i = 1; i <= totalPages; i++) pageItems.push(i);
+                } else {
+                    pageItems.push(1);
+                    if (currentPage > 3) pageItems.push('...');
+
+                    let start = Math.max(2, currentPage - 1);
+                    let end = Math.min(totalPages - 1, currentPage + 1);
+
+                    if (currentPage <= 3) {
+                        start = 2;
+                        end = 4;
+                    }
+
+                    if (currentPage >= totalPages - 2) {
+                        start = totalPages - 3;
+                        end = totalPages - 1;
+                    }
+
+                    for (let i = start; i <= end; i++) pageItems.push(i);
+                    if (currentPage < totalPages - 2) pageItems.push('...');
+                    pageItems.push(totalPages);
+                }
+            %>
+            <nav class="mt-3">
+                <ul class="pagination justify-content-center mb-0">
+                    <li class="page-item <%= currentPage <= 1 ? 'disabled' : '' %>">
+                        <a class="page-link" href="?page=1&<%= filterQuery %>">Đầu</a>
+                    </li>
+                    <li class="page-item <%= currentPage <= 1 ? 'disabled' : '' %>">
+                        <a class="page-link" href="?page=<%= currentPage - 1 %>&<%= filterQuery %>">Trước</a>
+                    </li>
+
+                    <% pageItems.forEach((pageNum) => { %>
+                        <% if (pageNum === '...') { %>
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        <% } else { %>
+                            <li class="page-item <%= pageNum === currentPage ? 'active' : '' %>">
+                                <a class="page-link" href="?page=<%= pageNum %>&<%= filterQuery %>"><%= pageNum %></a>
+                            </li>
+                        <% } %>
+                    <% }) %>
+
+                    <li class="page-item <%= currentPage >= totalPages ? 'disabled' : '' %>">
+                        <a class="page-link" href="?page=<%= currentPage + 1 %>&<%= filterQuery %>">Sau</a>
+                    </li>
+                    <li class="page-item <%= currentPage >= totalPages ? 'disabled' : '' %>">
+                        <a class="page-link" href="?page=<%= totalPages %>&<%= filterQuery %>">Cuối</a>
+                    </li>
+                </ul>
+            </nav>
+        <% } %>
+    <% } %>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const selectAll = document.getElementById('selectAllHouseholds');
+        const checkboxes = document.querySelectorAll('.household-checkbox');
+        const forms = [
+            document.getElementById('approveForm'),
+            document.getElementById('rejectForm')
+        ].filter(Boolean);
+
+        const syncSelectedIds = function (form) {
+            const selected = Array.from(checkboxes).filter(function (cb) {
+                return cb.checked && !cb.disabled;
+            });
+
+            form.querySelectorAll('input[name="selectedIds"]').forEach(function (input) {
+                input.remove();
+            });
+
+            selected.forEach(function (cb) {
+                const hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.name = 'selectedIds';
+                hidden.value = cb.value;
+                form.appendChild(hidden);
+            });
+        };
+
+        if (selectAll) {
+            selectAll.addEventListener('change', function () {
+                checkboxes.forEach(function (cb) {
+                    if (!cb.disabled) {
+                        cb.checked = selectAll.checked;
+                    }
+                });
+            });
+        }
+
+        forms.forEach(function (form) {
+            form.addEventListener('submit', function (event) {
+                const selected = Array.from(checkboxes).filter(function (cb) {
+                    return cb.checked && !cb.disabled;
+                });
+
+                if (!selected.length) {
+                    event.preventDefault();
+                    alert('Vui lòng chọn ít nhất một hộ gia đình để tiếp tục.');
+                    return;
+                }
+
+                if (form.id === 'rejectForm') {
+                    const rejectReason = document.getElementById('rejectReason');
+                    const reasonValue = rejectReason ? rejectReason.value.trim() : '';
+                    if (!reasonValue) {
+                        event.preventDefault();
+                        alert('Vui lòng nhập lý do từ chối hồ sơ.');
+                        return;
+                    }
+                }
+
+                syncSelectedIds(form);
+            });
+        });
+
+        const rejectButton = document.getElementById('rejectButton');
+        const rejectForm = document.getElementById('rejectForm');
+        const rejectReasonInput = document.getElementById('rejectReason');
+
+        if (rejectButton && rejectForm && rejectReasonInput) {
+            rejectButton.addEventListener('click', function () {
+                const selected = Array.from(checkboxes).filter(function (cb) {
+                    return cb.checked && !cb.disabled;
+                });
+
+                if (!selected.length) {
+                    alert('Vui lòng chọn ít nhất một hộ gia đình để tiếp tục.');
+                    return;
+                }
+
+                Swal.fire({
+                    title: 'Lý do từ chối hồ sơ',
+                    input: 'textarea',
+                    inputLabel: 'Nhập lý do từ chối',
+                    inputPlaceholder: 'Ví dụ: Thiếu giấy tờ...',
+                    inputAttributes: { 'aria-label': 'Lý do từ chối hồ sơ' },
+                    showCancelButton: true,
+                    confirmButtonText: 'Từ chối',
+                    cancelButtonText: 'Hủy',
+                    validationMessage: 'Vui lòng nhập lý do từ chối.',
+                    preConfirm: function (value) {
+                        if (!value || !String(value).trim()) {
+                            Swal.showValidationMessage('Vui lòng nhập lý do từ chối.');
+                            return false;
+                        }
+                        return String(value).trim();
+                    }
+                }).then(function (result) {
+                    if (!result.isConfirmed) return;
+                    rejectReasonInput.value = result.value;
+                    syncSelectedIds(rejectForm);
+                    rejectForm.submit();
+                });
+            });
+        }
+    });
+</script>
+
+<%- include('../partials/footer') %>

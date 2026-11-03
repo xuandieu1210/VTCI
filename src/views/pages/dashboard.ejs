@@ -1,0 +1,169 @@
+<%- include('../partials/header') %>
+<div class="row g-4">
+    <div class="col-lg-3 col-md-6">
+        <div class="stat-card">
+            <div class="stat-icon" style="background:#e8f4fd;color:#2c3e8f;">
+                <i class="fas fa-home"></i>
+            </div>
+            <div class="stat-number"><%= stats.totalHo || 0 %></div>
+            <div class="stat-label">Tổng số hộ gia đình</div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6">
+        <div class="stat-card">
+            <div class="stat-icon" style="background:#fff3e0;color:#e67e22;">
+                <i class="fas fa-map-marker-alt"></i>
+            </div>
+            <div class="stat-number"><%= stats.totalXa || 0 %></div>
+            <div class="stat-label">Tổng số xã/phường</div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6">
+        <div class="stat-card">
+            <div class="stat-icon" style="background:#e8f8f5;color:#1abc9c;">
+                <i class="fas fa-sim-card"></i>
+            </div>
+            <div class="stat-number"><%= stats.totalThueBao || 0 %></div>
+            <div class="stat-label">Tổng số thuê bao</div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6">
+        <a href="/ho-gia-dinh?thieu_ho_so=1" class="text-decoration-none text-reset d-block" title="Xem danh sách hộ thiếu hồ sơ">
+        <div class="stat-card">
+            <div class="stat-icon" style="background:#fdedec;color:#e74c3c;">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="stat-number"><%= stats.thieuHoSo || 0 %></div>
+            <div class="stat-label">Hồ sơ thiếu</div>
+            <span class="stat-change down"><i class="fas fa-list"></i> Xem danh sách</span>
+        </div>
+        </a>
+    </div>
+</div>
+
+<!-- Thao tác nhanh -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="table-card">
+            <div class="card-header">
+                <i class="fas fa-bolt text-warning"></i> Thao tác nhanh
+            </div>
+            <div class="mt-3">
+                <div class="row g-3">
+                    <div class="col-md-3 col-6">
+                        <a href="/ho-gia-dinh/create" class="btn btn-primary w-100 py-3" style="border-radius:12px;">
+                            <i class="fas fa-plus-circle fa-2x d-block"></i>
+                            <span>Thêm hộ mới</span>
+                        </a>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <a href="/import" class="btn btn-success w-100 py-3" style="border-radius:12px;">
+                            <i class="fas fa-file-import fa-2x d-block"></i>
+                            <span>Import dữ liệu</span>
+                        </a>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <a href="/bao-cao" class="btn btn-info w-100 py-3 text-white" style="border-radius:12px;">
+                            <i class="fas fa-chart-bar fa-2x d-block"></i>
+                            <span>Xem báo cáo</span>
+                        </a>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <a href="/danh-muc/xa" class="btn btn-warning w-100 py-3" style="border-radius:12px;">
+                            <i class="fas fa-map-marker-alt fa-2x d-block"></i>
+                            <span>Quản lý xã</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Phân bố theo xã -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="table-card">
+            <div class="card-header">
+                <i class="fas fa-chart-bar text-primary"></i> Phân bố hộ theo xã
+            </div>
+            <div class="mt-3">
+                <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Tên xã</th>
+                                <th>Số hộ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% 
+                            const byXa = stats.byXa || [];
+                            if (byXa && byXa.length > 0) { 
+                                byXa.forEach((item, index) => { %>
+                                    <tr>
+                                        <td><%= index + 1 %></td>
+                                        <td><strong><%= item.ten_xa %></strong></td>
+                                        <td><%= item.so_luong %></td>
+                                    </tr>
+                                <% }) 
+                            } else { %>
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-3">
+                                        <i class="fas fa-inbox"></i> Chưa có dữ liệu
+                                    </td>
+                                </tr>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Phân bố theo loại đối tượng -->
+    <div class="col-md-6">
+        <div class="table-card">
+            <div class="card-header">
+                <i class="fas fa-pie-chart text-success"></i> Phân bố theo loại đối tượng
+            </div>
+            <div class="mt-3">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Loại đối tượng</th>
+                                <th>Số hộ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% 
+                            const byLoai = stats.byLoaiDoiTuong || [];
+                            if (byLoai && byLoai.length > 0) { 
+                                byLoai.forEach((item, index) => { %>
+                                    <tr>
+                                        <td><%= index + 1 %></td>
+                                        <td><strong><%= item.ten_loai %></strong></td>
+                                        <td><%= item.so_luong %></td>
+                                    </tr>
+                                <% }) 
+                            } else { %>
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-3">
+                                        <i class="fas fa-inbox"></i> Chưa có dữ liệu
+                                    </td>
+                                </tr>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<%- include('../partials/footer') %>

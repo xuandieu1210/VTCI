@@ -1,0 +1,164 @@
+<%- include('../partials/header') %>
+<%
+const safeThueBaoMoi = thueBaoMoi || { rows: [], total: 0 };
+const safeHoSoThieu = hoSoThieu || { rows: [], summary: [], total: 0 };
+const currentYear = Number(filterYear || new Date().getFullYear());
+const currentMonth = Number(filterMonth || 0);
+%>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Năm báo cáo</label>
+                <input type="number" class="form-control" name="year" value="<%= currentYear %>" min="2000" max="2100">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Tháng (báo cáo thuê bao mới)</label>
+                <select class="form-select" name="month">
+                    <option value="">Tất cả tháng</option>
+                    <% for (let m = 1; m <= 12; m++) { %>
+                        <option value="<%= m %>" <%= currentMonth === m ? 'selected' : '' %>><%= m %></option>
+                    <% } %>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Xem báo cáo</button>
+                <a href="/bao-cao" class="btn btn-outline-secondary">Đặt lại</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-4">
+        <div class="card"><div class="card-body">
+            <div class="text-muted">Tổng hộ gia đình</div>
+            <div class="fs-4 fw-bold"><%= data.totalHo || 0 %></div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card"><div class="card-body">
+            <div class="text-muted">Tổng thuê bao mới (bộ lọc)</div>
+            <div class="fs-4 fw-bold"><%= safeThueBaoMoi.total || 0 %></div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card"><div class="card-body">
+            <div class="text-muted">Tổng hộ thiếu hồ sơ</div>
+            <div class="fs-4 fw-bold"><%= safeHoSoThieu.total || 0 %></div>
+        </div></div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Báo cáo danh sách thuê bao mới</h5>
+        <a class="btn btn-success btn-sm" href="/api/thong-ke/export/thue-bao-moi?year=<%= encodeURIComponent(currentYear) %>&month=<%= encodeURIComponent(currentMonth || '') %>">
+            <i class="fas fa-file-excel"></i> Xuất Excel
+        </a>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+                <thead>
+                    <tr>
+                        <th>STT</th>
+                        <th>Ngày tạo</th>
+                        <th>Số thuê bao</th>
+                        <th>Chủ thuê bao</th>
+                        <th>Mã dịch vụ</th>
+                        <th>Tên dịch vụ</th>
+                        <th>Mã khu vực</th>
+                        <th>Tên khu vực</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% if (safeThueBaoMoi.rows && safeThueBaoMoi.rows.length > 0) { %>
+                        <% safeThueBaoMoi.rows.forEach((item, idx) => { %>
+                            <tr>
+                                <td><%= idx + 1 %></td>
+                                <td><%= item.created_at ? new Date(item.created_at).toLocaleDateString('vi-VN') : '' %></td>
+                                <td><%= item.so_thue_bao || '' %></td>
+                                <td><%= item.ten_chu_thue_bao || '' %></td>
+                                <td><%= item.ma_dich_vu || '' %></td>
+                                <td><%= item.ten_dich_vu || '' %></td>
+                                <td><%= item.ma_khu_vuc || '' %></td>
+                                <td><%= item.ten_khu_vuc || '' %></td>
+                            </tr>
+                        <% }) %>
+                    <% } else { %>
+                        <tr><td colspan="8" class="text-center">Chưa có dữ liệu</td></tr>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Tổng hợp hồ sơ chưa đủ theo khu vực</h5>
+        <a class="btn btn-success btn-sm" href="/api/thong-ke/export/ho-so-thieu-khu-vuc?year=<%= encodeURIComponent(currentYear) %>">
+            <i class="fas fa-file-excel"></i> Xuất Excel
+        </a>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive mb-3">
+            <table class="table table-sm table-bordered">
+                <thead><tr><th>Mã khu vực</th><th>Tên khu vực</th><th>Số hộ thiếu hồ sơ</th></tr></thead>
+                <tbody>
+                    <% if (safeHoSoThieu.summary && safeHoSoThieu.summary.length > 0) { %>
+                        <% safeHoSoThieu.summary.forEach(item => { %>
+                            <tr>
+                                <td><%= item.ma_khu_vuc || '' %></td>
+                                <td><%= item.ten_khu_vuc || '' %></td>
+                                <td><%= item.so_ho_thieu_ho_so || 0 %></td>
+                            </tr>
+                        <% }) %>
+                    <% } else { %>
+                        <tr><td colspan="3" class="text-center">Chưa có dữ liệu</td></tr>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+                <thead>
+                    <tr>
+                        <th>STT</th>
+                        <th>Mã khu vực</th>
+                        <th>Tên khu vực</th>
+                        <th>Mã xã</th>
+                        <th>Tên xã</th>
+                        <th>Mã hộ</th>
+                        <th>Chủ hộ</th>
+                        <th>Số loại hồ sơ thiếu</th>
+                        <th>Danh sách loại hồ sơ thiếu</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% if (safeHoSoThieu.rows && safeHoSoThieu.rows.length > 0) { %>
+                        <% safeHoSoThieu.rows.forEach((item, idx) => { %>
+                            <tr>
+                                <td><%= idx + 1 %></td>
+                                <td><%= item.ma_khu_vuc || '' %></td>
+                                <td><%= item.ten_khu_vuc || '' %></td>
+                                <td><%= item.ma_xa || '' %></td>
+                                <td><%= item.ten_xa || '' %></td>
+                                <td><%= item.ma_ho || '' %></td>
+                                <td><%= item.ten_chu_ho || '' %></td>
+                                <td><%= item.so_loai_ho_so_thieu || 0 %></td>
+                                <td><%= item.ds_loai_ho_so_thieu || '' %></td>
+                            </tr>
+                        <% }) %>
+                    <% } else { %>
+                        <tr><td colspan="9" class="text-center">Chưa có dữ liệu</td></tr>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<%- include('../partials/footer') %>

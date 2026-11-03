@@ -1,0 +1,90 @@
+<% 
+    const hasMenuPermission = (perm) => {
+        if (!user) return false;
+        if (user.vai_tro === 'admin' || user.vai_tro === 'manager' || user.vai_tro === 'staff') {
+            const perms = Array.isArray(user.quyen_chuc_nang) ? user.quyen_chuc_nang : [];
+            return perms.length === 0 || perms.includes(perm);
+        }
+        const perms = Array.isArray(user.quyen_chuc_nang) ? user.quyen_chuc_nang : [];
+        return perms.includes(perm);
+    };
+%>
+<nav class="col-md-3 col-lg-2 d-md-block bg-dark sidebar">
+    <div class="position-sticky pt-3">
+        <div class="text-center text-white mb-4">
+            <h5>Vien Thong</h5>
+            <small>Cong Ich</small>
+        </div>
+        <ul class="nav flex-column">
+            <% if (hasMenuPermission('dashboard')) { %>
+                <li class="nav-item">
+                    <a class="nav-link text-white" href="/">
+                        <i class="fas fa-home"></i> Dashboard
+                    </a>
+                </li>
+            <% } %>
+            <% if (hasMenuPermission('ho_gia_dinh_xem')) { %>
+                <li class="nav-item">
+                    <a class="nav-link text-white" href="/ho-gia-dinh">
+                        <i class="fas fa-users"></i> Hộ gia đình
+                    </a>
+                </li>
+            <% } %>
+            <% if (hasMenuPermission('danh_muc_xem')) { %>
+                <li class="nav-item">
+                    <a class="nav-link text-white" href="/danh-muc/xa">
+                        <i class="fas fa-map-marker-alt"></i> Xã / phường
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link text-white" href="/danh-muc/loai-doi-tuong">
+                        <i class="fas fa-user-tag"></i> Loại đối tượng
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link text-white" href="/danh-muc/loai-dich-vu">
+                        <i class="fas fa-briefcase"></i> Loại dịch vụ
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link text-white" href="/danh-muc/vnpt-khu-vuc">
+                        <i class="fas fa-network-wired"></i> VNPT khu vực
+                    </a>
+                </li>
+            <% } %>
+            <% if (hasMenuPermission('import_excel')) { %>
+                <li class="nav-item">
+                    <a class="nav-link text-white" href="/import">
+                        <i class="fas fa-file-import"></i> Import du lieu
+                    </a>
+                </li>
+            <% } %>
+            <% if (hasMenuPermission('export_excel')) { %>
+                <li class="nav-item">
+                    <a class="nav-link text-white" href="/bao-cao">
+                        <i class="fas fa-chart-bar"></i> Báo cáo
+                    </a>
+                </li>
+            <% } %>
+            <% if (hasMenuPermission('quan_ly_user')) { %>
+                <li class="nav-item">
+                    <a class="nav-link text-white" href="/users">
+                        <i class="fas fa-user-shield"></i> Người dùng
+                    </a>
+                </li>
+            <% } %>
+            <% if (hasMenuPermission('duyet_ho_so')) { %>
+                <li class="nav-item">
+                    <a class="nav-link text-white" href="/duyet-ho-so">
+                        <i class="fas fa-clipboard-check"></i> Duyệt hồ sơ
+                    </a>
+                </li>
+            <% } %>
+            <li class="nav-item mt-5">
+                <a class="nav-link text-danger" href="/logout">
+                    <i class="fas fa-sign-out-alt"></i> Đăng xuất
+                </a>
+            </li>
+        </ul>
+    </div>
+</nav>

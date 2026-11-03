@@ -1,0 +1,234 @@
+<%- include('../../partials/header') %>
+<%
+    const safeXaList = Array.isArray(typeof xaList !== 'undefined' ? xaList : []) ? (typeof xaList !== 'undefined' ? xaList : []) : [];
+    const safeVnptKhuVucList = Array.isArray(typeof vnptKhuVucList !== 'undefined' ? vnptKhuVucList : []) ? (typeof vnptKhuVucList !== 'undefined' ? vnptKhuVucList : []) : [];
+    const safeData = Array.isArray(typeof data !== 'undefined' ? data : []) ? (typeof data !== 'undefined' ? data : []) : [];
+    const safePagination = typeof pagination !== 'undefined' ? pagination : {};
+    const safeSearch = typeof search !== 'undefined' ? search : '';
+    const safeXaId = typeof xaId !== 'undefined' ? xaId : '';
+    const safeVnptKhuVucId = typeof vnptKhuVucId !== 'undefined' ? vnptKhuVucId : '';
+    const safeThieuHoSoOnly = typeof thieuHoSoOnly !== 'undefined' ? Boolean(thieuHoSoOnly) : false;
+    const safeTrangThaiHoSo = typeof trangThaiHoSo !== 'undefined' ? String(trangThaiHoSo || '') : '';
+%>
+<% if (typeof successMessage !== 'undefined' && successMessage) { %>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            Swal.fire({
+                title: 'Thành công',
+                text: '<%= successMessage %>',
+                icon: 'success',
+                timer: 2200,
+                showConfirmButton: false
+            });
+        });
+    </script>
+<% } %>
+<div class="d-flex justify-content-between mb-3">
+    <h4>Danh sách hộ gia đình</h4>
+    <div class="d-flex gap-2">
+        <a href="/api/export/excel?search=<%= encodeURIComponent(safeSearch) %>&xa_id=<%= encodeURIComponent(safeXaId) %>&vnpt_khu_vuc_id=<%= encodeURIComponent(safeVnptKhuVucId) %>&thieu_ho_so=<%= safeThieuHoSoOnly ? '1' : '' %>&trang_thai_ho_so=<%= encodeURIComponent(safeTrangThaiHoSo) %>" class="btn btn-success">
+            <i class="fas fa-file-excel"></i> Xuất Excel
+        </a>
+        <a href="/ho-gia-dinh/create" class="btn btn-primary"><i class="fas fa-plus"></i> Thêm mới</a>
+    </div>
+</div>
+<form method="GET" class="row g-2 mb-3 align-items-end">
+    <div class="col-md-4">
+        <label class="form-label small mb-1">Tìm kiếm</label>
+        <input type="text" name="search" class="form-control" placeholder="CCCD, số thuê bao, tên..." value="<%= safeSearch %>">
+    </div>
+    <div class="col-md-3">
+        <label class="form-label small mb-1">Xã</label>
+        <select name="xa_id" class="form-select">
+            <option value="">Tất cả xã</option>
+            <% safeXaList.forEach(xa => { %>
+                <option value="<%= xa.id %>" <%= String(safeXaId) === String(xa.id) ? 'selected' : '' %>><%= xa.ten_xa %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label small mb-1">VNPT khu vực</label>
+        <select name="vnpt_khu_vuc_id" class="form-select">
+            <option value="">Tất cả khu vực</option>
+            <% safeVnptKhuVucList.forEach(item => { %>
+                <option value="<%= item.id %>" <%= String(safeVnptKhuVucId) === String(item.id) ? 'selected' : '' %>><%= item.ten_khu_vuc %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label small mb-1">Bộ lọc hồ sơ</label>
+        <select name="thieu_ho_so" class="form-select">
+            <option value="" <%= safeThieuHoSoOnly ? '' : 'selected' %>>Tất cả hộ</option>
+            <option value="1" <%= safeThieuHoSoOnly ? 'selected' : '' %>>Chỉ hộ thiếu hồ sơ</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label small mb-1">Trạng thái</label>
+        <select name="trang_thai_ho_so" class="form-select">
+            <option value="" <%= safeTrangThaiHoSo === '' ? 'selected' : '' %>>Tất cả</option>
+            <option value="day_du" <%= safeTrangThaiHoSo === 'day_du' ? 'selected' : '' %>>Đã duyệt</option>
+            <option value="tu_choi" <%= safeTrangThaiHoSo === 'tu_choi' ? 'selected' : '' %>>Từ chối</option>
+        </select>
+    </div>
+    <div class="col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-secondary w-100">Tìm kiếm</button>
+        <a href="/ho-gia-dinh" class="btn btn-outline-dark">Xóa</a>
+    </div>
+</form>
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead><tr>
+            <th>STT</th>
+            <th>Mã xã</th>
+            <th>Tên chủ hộ</th>
+            <th>Số CMND/CCCD/Mã số định danh của chủ hộ</th>
+            <th>Tên xã</th>
+            <th>Loại đối tượng</th>
+            <th>Dịch vụ viễn thông di động mặt đất</th>
+            <th>Dịch vụ truy nhập Internet BRCD mặt đất</th>
+            <th>Số/Mã số thuê bao</th>
+            <th>VNPT khu vực</th>
+            <th>Lý do từ chối</th>
+            <th>Thao tác</th>
+        </tr></thead>
+        <tbody>
+            <% if (safeData.length > 0) { %>
+                <% safeData.forEach((item, idx) => {
+                    const rowNo = ((Number(safePagination.page || 1) - 1) * Number(safePagination.limit || safeData.length || 0)) + idx + 1;
+                    const serviceRows = Array.isArray(item.thue_bao) ? item.thue_bao : [];
+                    const hasMobile = (item.dich_vu_di_dong || '').toLowerCase() === 'x' || serviceRows.some(s => {
+                        const loai = String(s.loai_hinh || '').toLowerCase().trim();
+                        const ma = String(s.ma_dich_vu || '').toLowerCase().trim();
+                        return loai === 'di_dong_mat_dat' || loai === 'vien_thong_di_dong_mat_dat' || ma === 'dmdd';
+                    });
+                    const hasInternet = (item.dich_vu_internet_brcd || '').toLowerCase() === 'x' || serviceRows.some(s => {
+                        const loai = String(s.loai_hinh || '').toLowerCase().trim();
+                        const ma = String(s.ma_dich_vu || '').toLowerCase().trim();
+                        return loai === 'internet_brcd' || loai === 'truy_nhap_internet_brcd_mat_dat' || loai === 'brcd' || ma === 'ibrcd';
+                    });
+                    const soThueBao = item.so_thue_bao || item.so_thue_bao_chinh || (serviceRows[0] ? serviceRows[0].so_thue_bao : '') || '';
+                    const currentUserRole = typeof user !== 'undefined' && user ? String(user.vai_tro || user.role || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+                    const currentUserArea = typeof user !== 'undefined' && user ? Number(user.vnpt_khu_vuc_id) : null;
+                    const itemArea = Number(item.vnpt_khu_vuc_id);
+                    const canManageThisHousehold = currentUserRole !== 'vnptkhuvuc' || !currentUserArea || !itemArea || Number(itemArea) === Number(currentUserArea);
+                %>
+                    <tr>
+                        <td><%= rowNo %></td>
+                        <td><%= item.ma_xa || '' %></td>
+                        <td><%= item.ten_chu_ho %></td>
+                        <td><%= item.so_cmnd %></td>
+                        <td><%= item.ten_xa %></td>
+                        <td><%= item.ten_loai_doi_tuong || '' %></td>
+                        <td><%= hasMobile ? 'x' : '' %></td>
+                        <td><%= hasInternet ? 'x' : '' %></td>
+                        <td><%= soThueBao %></td>
+                        <td><%= item.ten_khu_vuc || '' %></td>
+                        <td>
+                            <% if (String(item.trang_thai_ho_so || '') === 'tu_choi') { %>
+                                <span class="text-danger"><%= item.ly_do_tu_choi || 'Không có lý do' %></span>
+                            <% } else { %>
+                                <span class="text-muted">-</span>
+                            <% } %>
+                        </td>
+                        <td>
+                            <a href="/ho-gia-dinh/<%= item.id %>" class="btn btn-sm btn-info" title="Xem chi tiết"><i class="fas fa-eye"></i></a>
+                            <% if (canManageThisHousehold) { %>
+                                <a href="/ho-gia-dinh/<%= item.id %>/edit" class="btn btn-sm btn-warning" title="Sửa"><i class="fas fa-edit"></i></a>
+                                <button class="btn btn-sm btn-danger" title="Xóa" onclick="deleteHo('<%= item.id %>')"><i class="fas fa-trash"></i></button>
+                            <% } %>
+                        </td>
+                    </tr>
+                <% }) %>
+            <% } else { %>
+                <tr><td colspan="12" class="text-center">Không có dữ liệu</td></tr>
+            <% } %>
+        </tbody>
+    </table>
+</div>
+<% if (safePagination && safePagination.totalPages > 1) { %>
+    <%
+        const currentPage = Number(safePagination.page || 1);
+        const totalPages = Number(safePagination.totalPages || 1);
+        const pageItems = [];
+        const buildPageLink = (page) => '?page=' + page + '&search=' + encodeURIComponent(safeSearch) + '&xa_id=' + encodeURIComponent(safeXaId) + '&vnpt_khu_vuc_id=' + encodeURIComponent(safeVnptKhuVucId) + '&thieu_ho_so=' + (safeThieuHoSoOnly ? '1' : '') + '&trang_thai_ho_so=' + encodeURIComponent(safeTrangThaiHoSo);
+
+        if (totalPages <= 7) {
+            for (let i = 1; i <= totalPages; i++) pageItems.push(i);
+        } else {
+            pageItems.push(1);
+            if (currentPage > 3) pageItems.push('...');
+
+            let start = Math.max(2, currentPage - 1);
+            let end = Math.min(totalPages - 1, currentPage + 1);
+
+            if (currentPage <= 3) {
+                start = 2;
+                end = 4;
+            }
+
+            if (currentPage >= totalPages - 2) {
+                start = totalPages - 3;
+                end = totalPages - 1;
+            }
+
+            for (let i = start; i <= end; i++) pageItems.push(i);
+            if (currentPage < totalPages - 2) pageItems.push('...');
+            pageItems.push(totalPages);
+        }
+    %>
+    <nav class="mt-3">
+        <ul class="pagination">
+            <li class="page-item <%= currentPage <= 1 ? 'disabled' : '' %>">
+                <a class="page-link" href="<%= buildPageLink(1) %>">Đầu</a>
+            </li>
+            <li class="page-item <%= currentPage <= 1 ? 'disabled' : '' %>">
+                <a class="page-link" href="<%= buildPageLink(currentPage - 1) %>">Trước</a>
+            </li>
+
+            <% pageItems.forEach((p) => { %>
+                <% if (p === '...') { %>
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                <% } else { %>
+                    <li class="page-item <%= p === currentPage ? 'active' : '' %>">
+                        <a class="page-link" href="<%= buildPageLink(p) %>"><%= p %></a>
+                    </li>
+                <% } %>
+            <% }) %>
+
+            <li class="page-item <%= currentPage >= totalPages ? 'disabled' : '' %>">
+                <a class="page-link" href="<%= buildPageLink(currentPage + 1) %>">Sau</a>
+            </li>
+            <li class="page-item <%= currentPage >= totalPages ? 'disabled' : '' %>">
+                <a class="page-link" href="<%= buildPageLink(totalPages) %>">Cuối</a>
+            </li>
+        </ul>
+    </nav>
+<% } %>
+<script>
+function deleteHo(id) {
+    Swal.fire({
+        title: 'Xác nhận xóa?',
+        text: 'Bạn có muốn xóa hộ gia đình này?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Xóa',
+        cancelButtonText: 'Hủy'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.post('/ho-gia-dinh/' + id + '/delete', function(res) {
+                if (res.success) {
+                    window.location.href = '/ho-gia-dinh?deleted=1';
+                    return;
+                }
+                Swal.fire('Lỗi!', res.message || 'Không thể xóa', 'error');
+            }).fail(function(xhr) {
+                const message = xhr.responseJSON?.message || 'Không thể xóa hộ gia đình';
+                Swal.fire('Lỗi!', message, 'error');
+            });
+        }
+    });
+}
+</script>
+<%- include('../../partials/footer') %>

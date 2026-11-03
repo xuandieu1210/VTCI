@@ -1,0 +1,199 @@
+<%- include('../../partials/header') %>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>Danh sách loại đối tượng</h4>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModal">
+        <i class="fas fa-plus"></i> Thêm mới
+    </button>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Mã loại</th>
+                        <th>Tên loại</th>
+                        <th>Thứ tự ưu tiên</th>
+                        <th>Trạng thái</th>
+                        <th>Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% if (data && data.length > 0) { %>
+                        <% data.forEach(item => { %>
+                            <tr>
+                                <td><%= item.ma_loai %></td>
+                                <td><%= item.ten_loai %></td>
+                                <td><%= item.thu_tu_uu_tien %></td>
+                                <td>
+                                    <span class="badge <%= item.trang_thai === 'dang_hoat_dong' ? 'bg-success' : 'bg-secondary' %>">
+                                        <%= item.trang_thai === 'dang_hoat_dong' ? 'Hoạt động' : 'Ngừng hoạt động' %>
+                                    </span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editModal" data-id="<%= item.id %>" data-ma="<%= item.ma_loai %>" data-ten="<%= item.ten_loai %>" data-thu_tu="<%= item.thu_tu_uu_tien %>" data-trang_thai="<%= item.trang_thai %>"><i class="fas fa-edit"></i></button>
+                                    <button class="btn btn-sm btn-secondary" onclick="deactivateLoai(<%= item.id %>)" title="Ngừng sử dụng"><i class="fas fa-ban"></i></button>
+                                    <button class="btn btn-sm btn-danger" onclick="deleteLoai(<%= item.id %>)"><i class="fas fa-trash"></i></button>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    <% } else { %>
+                        <tr><td colspan="5" class="text-center text-muted">Không có dữ liệu</td></tr>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<% if (pagination && pagination.totalPages > 1) { %>
+    <%
+        const currentPage = Number(pagination.page || 1);
+        const totalPages = Number(pagination.totalPages || 1);
+        const pageItems = [];
+
+        if (totalPages <= 7) {
+            for (let i = 1; i <= totalPages; i++) pageItems.push(i);
+        } else {
+            pageItems.push(1);
+            if (currentPage > 3) pageItems.push('...');
+
+            let start = Math.max(2, currentPage - 1);
+            let end = Math.min(totalPages - 1, currentPage + 1);
+
+            if (currentPage <= 3) {
+                start = 2;
+                end = 4;
+            }
+
+            if (currentPage >= totalPages - 2) {
+                start = totalPages - 3;
+                end = totalPages - 1;
+            }
+
+            for (let i = start; i <= end; i++) pageItems.push(i);
+            if (currentPage < totalPages - 2) pageItems.push('...');
+            pageItems.push(totalPages);
+        }
+    %>
+    <nav class="mt-3">
+        <ul class="pagination mb-0">
+            <li class="page-item <%= currentPage <= 1 ? 'disabled' : '' %>">
+                <a class="page-link" href="?page=1">Đầu</a>
+            </li>
+            <li class="page-item <%= currentPage <= 1 ? 'disabled' : '' %>">
+                <a class="page-link" href="?page=<%= currentPage - 1 %>">Trước</a>
+            </li>
+
+            <% pageItems.forEach((p) => { %>
+                <% if (p === '...') { %>
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                <% } else { %>
+                    <li class="page-item <%= p === currentPage ? 'active' : '' %>">
+                        <a class="page-link" href="?page=<%= p %>"><%= p %></a>
+                    </li>
+                <% } %>
+            <% }) %>
+
+            <li class="page-item <%= currentPage >= totalPages ? 'disabled' : '' %>">
+                <a class="page-link" href="?page=<%= currentPage + 1 %>">Sau</a>
+            </li>
+            <li class="page-item <%= currentPage >= totalPages ? 'disabled' : '' %>">
+                <a class="page-link" href="?page=<%= totalPages %>">Cuối</a>
+            </li>
+        </ul>
+    </nav>
+<% } %>
+
+<div class="modal fade" id="createModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Thêm mới loại đối tượng</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <form id="createForm">
+                    <div class="mb-3"><label class="form-label">Mã loại</label><input class="form-control" name="ma_loai" required></div>
+                    <div class="mb-3"><label class="form-label">Tên loại</label><input class="form-control" name="ten_loai" required></div>
+                    <div class="mb-3"><label class="form-label">Thứ tự ưu tiên</label><input class="form-control" type="number" name="thu_tu_uu_tien" value="0"></div>
+                    <div class="mb-3"><label class="form-label">Mô tả</label><textarea class="form-control" name="mo_ta"></textarea></div>
+                    <button type="submit" class="btn btn-primary">Lưu</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Sửa loại đối tượng</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <form id="editForm">
+                    <div class="mb-3"><label class="form-label">Mã loại</label><input class="form-control" name="ma_loai" id="editMaLoai" required></div>
+                    <div class="mb-3"><label class="form-label">Tên loại</label><input class="form-control" name="ten_loai" id="editTenLoai" required></div>
+                    <div class="mb-3"><label class="form-label">Thứ tự ưu tiên</label><input class="form-control" type="number" name="thu_tu_uu_tien" id="editThuTu" value="0"></div>
+                    <div class="mb-3"><label class="form-label">Trạng thái</label><select class="form-select" name="trang_thai" id="editTrangThai"><option value="dang_hoat_dong">Hoạt động</option><option value="ngung_hoat_dong">Ngừng hoạt động</option></select></div>
+                    <button type="submit" class="btn btn-primary">Cập nhật</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const createForm = document.getElementById('createForm');
+createForm.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const payload = Object.fromEntries(new FormData(createForm).entries());
+    const res = await fetch('/api/danh-muc/loai-doi-tuong', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const result = await res.json();
+    if (result.success) location.reload();
+    else alert(result.message || 'Loi');
+});
+
+const editModal = document.getElementById('editModal');
+editModal.addEventListener('show.bs.modal', function (event) {
+    const button = event.relatedTarget;
+    const id = button.getAttribute('data-id');
+    document.getElementById('editMaLoai').value = button.getAttribute('data-ma');
+    document.getElementById('editTenLoai').value = button.getAttribute('data-ten');
+    document.getElementById('editThuTu').value = button.getAttribute('data-thu_tu');
+    document.getElementById('editTrangThai').value = button.getAttribute('data-trang_thai');
+    document.getElementById('editForm').dataset.id = id;
+});
+
+document.getElementById('editForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const id = this.dataset.id;
+    const payload = Object.fromEntries(new FormData(this).entries());
+    const res = await fetch('/api/danh-muc/loai-doi-tuong/' + id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const result = await res.json();
+    if (result.success) location.reload();
+    else alert(result.message || 'Loi');
+});
+
+async function deleteLoai(id) {
+    if (!confirm('Xoa VINH VIEN loai doi tuong nay? Hanh dong khong the hoan tac.')) return;
+    const res = await fetch('/api/danh-muc/loai-doi-tuong/' + id, { method: 'DELETE' });
+    const result = await res.json();
+    if (result.success) location.reload();
+    else alert(result.message || 'Loi');
+}
+
+async function deactivateLoai(id) {
+    if (!confirm('Ngung su dung loai doi tuong nay?')) return;
+    const res = await fetch('/api/danh-muc/loai-doi-tuong/' + id + '/deactivate', { method: 'PATCH' });
+    const result = await res.json();
+    if (result.success) location.reload();
+    else alert(result.message || 'Loi');
+}
+</script>
+<%- include('../../partials/footer') %>
