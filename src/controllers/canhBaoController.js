@@ -83,7 +83,7 @@ exports.xuLy = async (req, res) => {
 exports.dong = async (req, res) => {
     try {
         const { id } = req.params;
-        const [result] = await pool.query('UPDATE canh_bao SET trang_thai = "da_dong" WHERE id = ?', [id]);
+        const [result] = await pool.query("UPDATE canh_bao SET trang_thai = 'da_dong' WHERE id = ?", [id]);
         if (result.affectedRows === 0) {
             return res.status(404).json({ success: false, message: 'Khong tim thay canh bao' });
         }
@@ -106,7 +106,7 @@ exports.kiemTraTuDong = async (req, res) => {
 
         const ensureWarning = async (loai, mo_ta, doUuTien, ho_gia_dinh_id = null, thanh_vien_id = null, thue_bao_id = null) => {
             const [existing] = await pool.query(
-                'SELECT id FROM canh_bao WHERE loai_canh_bao = ? AND mo_ta = ? AND ho_gia_dinh_id <=> ? AND thanh_vien_id <=> ? AND thue_bao_id <=> ? LIMIT 1',
+                'SELECT id FROM canh_bao WHERE loai_canh_bao = ? AND mo_ta = ? AND ho_gia_dinh_id IS NOT DISTINCT FROM ? AND thanh_vien_id IS NOT DISTINCT FROM ? AND thue_bao_id IS NOT DISTINCT FROM ? LIMIT 1',
                 [loai, mo_ta, ho_gia_dinh_id, thanh_vien_id, thue_bao_id]
             );
             if (existing.length > 0) return false;
@@ -119,12 +119,7 @@ exports.kiemTraTuDong = async (req, res) => {
             return true;
         };
 
-        const [columnRows] = await pool.query("SHOW COLUMNS FROM ho_so_dinh_kem LIKE 'nam_ho_so'");
-        const hasNamHoSoColumn = columnRows.length > 0;
-
-        const [documents] = hasNamHoSoColumn
-            ? await pool.query('SELECT ho_gia_dinh_id, loai_ho_so, nam_ho_so FROM ho_so_dinh_kem')
-            : await pool.query('SELECT ho_gia_dinh_id, loai_ho_so, YEAR(created_at) AS nam_ho_so FROM ho_so_dinh_kem');
+        const [documents] = await pool.query('SELECT ho_gia_dinh_id, loai_ho_so, nam_ho_so FROM ho_so_dinh_kem');
 
         const documentsByHousehold = new Map();
         for (const doc of documents || []) {
@@ -144,7 +139,7 @@ exports.kiemTraTuDong = async (req, res) => {
                 docs
                     .filter(doc => {
                         const docYear = Number(doc.nam_ho_so);
-                        return Number.isInteger(docYear) && docYear === currentYear;
+                        return doc.loai_ho_so === 'giay_cccd' || (Number.isInteger(docYear) && docYear === currentYear);
                     })
                     .map(doc => String(doc.loai_ho_so))
             );
@@ -158,7 +153,7 @@ exports.kiemTraTuDong = async (req, res) => {
 
                     const message = docType === 'giay_chung_nhan_ho_ngheo_can_ngheo'
                         ? 'Hộ ' + householdLabel + ' chưa cập nhật giấy chứng nhận hộ nghèo/cận nghèo năm ' + currentYear
-                        : 'Hộ ' + householdLabel + ' thiếu hồ sơ ' + label + ' năm ' + currentYear;
+                        : 'Hộ ' + householdLabel + ' thiếu hồ sơ ' + label + (docType === 'giay_cccd' ? '' : ' năm ' + currentYear);
 
                     const created = await ensureWarning('thieu_ho_so', message, 'cao', household.id);
                     if (created) warnings.push(message);
@@ -182,7 +177,7 @@ exports.kiemTraTuDong = async (req, res) => {
         const [sapHetHan] = await pool.query(`
             SELECT * FROM ho_so_dinh_kem
             WHERE ngay_het_han IS NOT NULL
-            AND ngay_het_han BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+            AND ngay_het_han BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
         `);
         for (const item of sapHetHan) {
             const message = 'Ho so ' + item.ten_file + ' sap het han ngay ' + item.ngay_het_han;

@@ -10,7 +10,7 @@ class VNPTKhuVuc {
         const params = [];
 
         if (search) {
-            sql += " AND (ten_khu_vuc LIKE ? OR ma_khu_vuc LIKE ?)";
+            sql += " AND (ten_khu_vuc ILIKE ? OR ma_khu_vuc ILIKE ?)";
             params.push("%" + search + "%", "%" + search + "%");
         }
         if (trang_thai) {
@@ -61,7 +61,7 @@ class VNPTKhuVuc {
     }
 
     static async deactivate(id) {
-        const sql = 'UPDATE vnpt_khu_vuc SET trang_thai = "ngung_hoat_dong" WHERE id = ?';
+        const sql = "UPDATE vnpt_khu_vuc SET trang_thai = 'ngung_hoat_dong' WHERE id = ?";
         const [result] = await pool.query(sql, [id]);
         return result.affectedRows;
     }

@@ -2,7 +2,11 @@
 const pool = require('../config/database');
 const fs = require('fs');
 const path = require('path');
+const mammoth = require('mammoth');
+const sanitizeHtml = require('sanitize-html');
+const XLSX = require('xlsx');
 const { getStoredHoSoPath, resolveHoSoPath } = require('../utils/fileHelper');
+const { invalidateReview } = require('../utils/documentStatus');
 
 const DOCUMENT_TYPE_MAP = {
     giay_chung_nhan_ho_ngheo_can_ngheo: 'Giấy chứng nhận hộ nghèo/cận nghèo',
@@ -77,6 +81,7 @@ exports.upload = async (req, res) => {
         const conn = await pool.getConnection();
         try {
             await conn.beginTransaction();
+            await conn.query('SELECT id FROM ho_gia_dinh WHERE id = ? FOR UPDATE', [ho_gia_dinh_id]);
 
             const [existingRows] = await conn.query(
                 'SELECT * FROM ho_so_dinh_kem WHERE ho_gia_dinh_id = ? AND loai_ho_so = ? AND nam_ho_so = ? ORDER BY created_at DESC',
@@ -84,12 +89,6 @@ exports.upload = async (req, res) => {
             );
 
             if (existingRows && existingRows.length > 0) {
-                for (const oldDoc of existingRows) {
-                    const oldFilePath = resolveHoSoPath(oldDoc.duong_dan_file);
-                    if (oldFilePath && fs.existsSync(oldFilePath)) {
-                        try { fs.unlinkSync(oldFilePath); } catch (e) {}
-                    }
-                }
                 await conn.query('DELETE FROM ho_so_dinh_kem WHERE ho_gia_dinh_id = ? AND loai_ho_so = ? AND nam_ho_so = ?', [ho_gia_dinh_id, normalizedType, normalizedYear]);
             }
 
@@ -105,13 +104,15 @@ exports.upload = async (req, res) => {
                 ngay_het_han || null, req.user?.username || 'system', mo_ta || null
             ]);
 
-            await conn.query(`
-                UPDATE ho_gia_dinh
-                SET trang_thai_ho_so = 'can_bo_sung', ly_do_tu_choi = NULL, updated_at = NOW()
-                WHERE id = ? AND trang_thai_ho_so IN ('day_du', 'tu_choi')
-            `, [ho_gia_dinh_id]);
+            await invalidateReview(conn, ho_gia_dinh_id, [{ loai_ho_so: normalizedType, nam_ho_so: normalizedYear }]);
 
             await conn.commit();
+            for (const oldDoc of existingRows) {
+                const oldFilePath = resolveHoSoPath(oldDoc.duong_dan_file);
+                if (oldFilePath && fs.existsSync(oldFilePath)) {
+                    try { fs.unlinkSync(oldFilePath); } catch (error) { console.warn('Could not remove replaced document:', error.message); }
+                }
+            }
             const [rows] = await pool.query('SELECT * FROM ho_so_dinh_kem WHERE id = ?', [result.insertId]);
             res.status(201).json({ success: true, data: rows[0] });
             return;
@@ -129,40 +130,60 @@ exports.upload = async (req, res) => {
 };
 
 exports.update = async (req, res) => {
+    let conn;
     try {
         const { id } = req.params;
         const { loai_ho_so, ngay_het_han, trang_thai, mo_ta, nam_ho_so } = req.body;
         const normalizedType = normalizeLoaiHoSo(loai_ho_so);
         const normalizedYear = normalizeNamHoSo(nam_ho_so);
-        const sql = `UPDATE ho_so_dinh_kem SET loai_ho_so = ?, nam_ho_so = ?, ngay_het_han = ?, trang_thai = ?, mo_ta = ? WHERE id = ?`;
-        const [result] = await pool.query(sql, [normalizedType, normalizedYear, ngay_het_han, trang_thai, mo_ta, id]);
-        if (result.affectedRows === 0) {
+        if (!isAllowedDocumentType(normalizedType)) return res.status(400).json({ success: false, message: 'Loại hồ sơ không hợp lệ' });
+        conn = await pool.getConnection();
+        await conn.beginTransaction();
+        const [previous] = await conn.query('SELECT * FROM ho_so_dinh_kem WHERE id = ? FOR UPDATE', [id]);
+        if (!previous.length) {
+            await conn.rollback();
             return res.status(404).json({ success: false, message: 'Khong tim thay ho so' });
         }
-        const [rows] = await pool.query('SELECT * FROM ho_so_dinh_kem WHERE id = ?', [id]);
+        await conn.query('SELECT id FROM ho_gia_dinh WHERE id = ? FOR UPDATE', [previous[0].ho_gia_dinh_id]);
+        const sql = `UPDATE ho_so_dinh_kem SET loai_ho_so = ?, nam_ho_so = ?, ngay_het_han = ?, trang_thai = ?, mo_ta = ? WHERE id = ?`;
+        await conn.query(sql, [normalizedType, normalizedYear, ngay_het_han, trang_thai, mo_ta, id]);
+        await invalidateReview(conn, previous[0].ho_gia_dinh_id, [previous[0], { loai_ho_so: normalizedType, nam_ho_so: normalizedYear }]);
+        const [rows] = await conn.query('SELECT * FROM ho_so_dinh_kem WHERE id = ?', [id]);
+        await conn.commit();
         res.json({ success: true, data: rows[0] });
     } catch (error) {
+        if (conn) await conn.rollback().catch(() => {});
         res.status(400).json({ success: false, message: error.message });
+    } finally {
+        if (conn) conn.release();
     }
 };
 
 exports.delete = async (req, res) => {
+    let conn;
     try {
         const { id } = req.params;
-        const [hoSo] = await pool.query('SELECT * FROM ho_so_dinh_kem WHERE id = ?', [id]);
-        if (hoSo && hoSo.length > 0 && hoSo[0].duong_dan_file) {
-            const filePath = resolveHoSoPath(hoSo[0].duong_dan_file);
-            if (filePath && fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-            }
-        }
-        const [result] = await pool.query('DELETE FROM ho_so_dinh_kem WHERE id = ?', [id]);
-        if (result.affectedRows === 0) {
+        conn = await pool.getConnection();
+        await conn.beginTransaction();
+        const [hoSo] = await conn.query('SELECT * FROM ho_so_dinh_kem WHERE id = ? FOR UPDATE', [id]);
+        if (!hoSo.length) {
+            await conn.rollback();
             return res.status(404).json({ success: false, message: 'Khong tim thay ho so' });
+        }
+        await conn.query('SELECT id FROM ho_gia_dinh WHERE id = ? FOR UPDATE', [hoSo[0].ho_gia_dinh_id]);
+        await conn.query('DELETE FROM ho_so_dinh_kem WHERE id = ?', [id]);
+        await invalidateReview(conn, hoSo[0].ho_gia_dinh_id, [hoSo[0]]);
+        await conn.commit();
+        const filePath = resolveHoSoPath(hoSo[0].duong_dan_file);
+        if (filePath && fs.existsSync(filePath)) {
+            try { fs.unlinkSync(filePath); } catch (error) { console.warn('Could not remove document:', error.message); }
         }
         res.json({ success: true, message: 'Xoa ho so thanh cong' });
     } catch (error) {
+        if (conn) await conn.rollback().catch(() => {});
         res.status(500).json({ success: false, message: error.message });
+    } finally {
+        if (conn) conn.release();
     }
 };
 
@@ -183,16 +204,58 @@ exports.download = async (req, res) => {
     }
 };
 
+exports.preview = async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM ho_so_dinh_kem WHERE id = ?', [req.params.id]);
+        if (!rows.length) return res.status(404).json({ success: false, message: 'Không tìm thấy hồ sơ' });
+        const filePath = resolveHoSoPath(rows[0].duong_dan_file);
+        if (!filePath || !fs.existsSync(filePath)) {
+            return res.status(404).json({ success: false, message: 'Tệp hồ sơ không tồn tại' });
+        }
+
+        const extension = path.extname(filePath).toLowerCase();
+        res.set('Cache-Control', 'no-store');
+        if (['.pdf', '.jpg', '.jpeg', '.png'].includes(extension)) {
+            return res.type(extension).sendFile(filePath);
+        }
+
+        let content;
+        if (extension === '.docx') {
+            content = (await mammoth.convertToHtml({ path: filePath })).value;
+        } else if (['.xlsx', '.xls', '.csv'].includes(extension)) {
+            const workbook = XLSX.readFile(filePath);
+            content = workbook.SheetNames.map(name => {
+                const title = sanitizeHtml(name, { allowedTags: [], allowedAttributes: {} });
+                return `<h2>${title}</h2>${XLSX.utils.sheet_to_html(workbook.Sheets[name])}`;
+            }).join('');
+        } else {
+            return res.status(415).json({ success: false, message: 'Định dạng này không hỗ trợ xem trực tiếp' });
+        }
+
+        const safeContent = sanitizeHtml(content, {
+            allowedTags: ['p', 'br', 'strong', 'em', 'u', 's', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img', 'span', 'div', 'sup', 'sub'],
+            allowedAttributes: { img: ['src', 'alt'], td: ['colspan', 'rowspan'], th: ['colspan', 'rowspan'] },
+            allowedSchemes: ['data'],
+            allowedSchemesByTag: { img: ['data'] }
+        });
+        res.set('Content-Security-Policy', "default-src 'none'; img-src data:; style-src 'unsafe-inline'; frame-ancestors 'self'");
+        res.type('html').send(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;margin:24px;overflow-wrap:anywhere}table{border-collapse:collapse;max-width:100%}td,th{border:1px solid #ccc;padding:4px}img{max-width:100%;height:auto}</style></head><body>${safeContent}</body></html>`);
+    } catch (error) {
+        console.error('Document preview failed:', error.message);
+        if (!res.headersSent) res.status(500).json({ success: false, message: 'Không thể xem tệp hồ sơ' });
+    }
+};
+
 exports.checkExpired = async (req, res) => {
     try {
         const [sapHetHan] = await pool.query(`
             SELECT * FROM ho_so_dinh_kem
             WHERE ngay_het_han IS NOT NULL
-            AND ngay_het_han BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+            AND ngay_het_han BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
         `);
         const [daHetHan] = await pool.query(`
             SELECT * FROM ho_so_dinh_kem
-            WHERE ngay_het_han IS NOT NULL AND ngay_het_han < CURDATE()
+            WHERE ngay_het_han IS NOT NULL AND ngay_het_han < CURRENT_DATE
         `);
         res.json({
             success: true,

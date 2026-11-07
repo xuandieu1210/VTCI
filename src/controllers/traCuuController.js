@@ -58,19 +58,19 @@ exports.timKiemNhanh = async (req, res) => {
 
         // Tim ho
         const [ho] = await pool.query(
-            'SELECT * FROM ho_gia_dinh WHERE ten_chu_ho LIKE ? OR so_cmnd LIKE ? OR ma_ho LIKE ? LIMIT 10',
+            'SELECT * FROM ho_gia_dinh WHERE ten_chu_ho ILIKE ? OR so_cmnd ILIKE ? OR ma_ho ILIKE ? LIMIT 10',
             [s, s, s]
         );
 
         // Tim thanh vien
         const [thanhVien] = await pool.query(
-            'SELECT * FROM thanh_vien WHERE ho_ten LIKE ? OR so_cmnd LIKE ? LIMIT 10',
+            'SELECT * FROM thanh_vien WHERE ho_ten ILIKE ? OR so_cmnd ILIKE ? LIMIT 10',
             [s, s]
         );
 
         // Tim thue bao
         const [thueBao] = await pool.query(
-            'SELECT * FROM thue_bao_dich_vu WHERE so_thue_bao LIKE ? OR ten_chu_thue_bao LIKE ? LIMIT 10',
+            'SELECT * FROM thue_bao_dich_vu WHERE so_thue_bao ILIKE ? OR ten_chu_thue_bao ILIKE ? LIMIT 10',
             [s, s]
         );
 

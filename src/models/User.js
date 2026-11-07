@@ -5,14 +5,11 @@ const bcrypt = require('bcryptjs');
 class User {
     static async ensureUserPermissionColumn() {
         try {
-            const [columns] = await pool.query("SHOW COLUMNS FROM users LIKE 'quyen_chuc_nang'");
+            const [columns] = await pool.query(
+                "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'users' AND column_name = 'quyen_chuc_nang'"
+            );
             if (!columns.length) {
-                await pool.query('ALTER TABLE users ADD COLUMN quyen_chuc_nang TEXT NULL AFTER vnpt_khu_vuc_id');
-            }
-
-            const [roleColumns] = await pool.query("SHOW COLUMNS FROM users LIKE 'vai_tro'");
-            if (roleColumns.length && !String(roleColumns[0].Type).includes('vnpt_khu_vuc')) {
-                await pool.query("ALTER TABLE users MODIFY vai_tro ENUM('admin', 'manager', 'staff', 'vnpt_khu_vuc') DEFAULT 'staff'");
+                await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS quyen_chuc_nang TEXT NULL');
             }
         } catch (error) {
             console.error('User permission schema sync failed:', error.message);
@@ -55,7 +52,7 @@ class User {
         const params = [];
 
         if (search) {
-            sql += " AND (u.username LIKE ? OR u.ho_ten LIKE ? OR u.email LIKE ?)";
+            sql += " AND (u.username ILIKE ? OR u.ho_ten ILIKE ? OR u.email ILIKE ?)";
             const s = "%" + search + "%";
             params.push(s, s, s);
         }

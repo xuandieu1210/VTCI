@@ -15,11 +15,11 @@ class DanhMucXa {
         const params = [];
 
         if (search) {
-            sql += " AND x.ten_xa LIKE ?";
+            sql += " AND x.ten_xa ILIKE ?";
             params.push("%" + search + "%");
         }
         if (searchCu) {
-            sql += " AND x.ten_xa_cu LIKE ?";
+            sql += " AND x.ten_xa_cu ILIKE ?";
             params.push("%" + searchCu + "%");
         }
         if (vnpt_khu_vuc_id) {
@@ -76,7 +76,7 @@ class DanhMucXa {
     }
 
     static async deactivate(id) {
-        const sql = 'UPDATE danh_muc_xa SET trang_thai = "ngung_hoat_dong" WHERE id = ?';
+        const sql = "UPDATE danh_muc_xa SET trang_thai = 'ngung_hoat_dong' WHERE id = ?";
         const [result] = await pool.query(sql, [id]);
         return result.affectedRows;
     }
@@ -93,7 +93,7 @@ class DanhMucXa {
     }
 
     static async getAllActive() {
-        const sql = 'SELECT * FROM danh_muc_xa WHERE trang_thai = "dang_hoat_dong" ORDER BY ten_xa';
+        const sql = "SELECT * FROM danh_muc_xa WHERE trang_thai = 'dang_hoat_dong' ORDER BY ten_xa";
         const [rows] = await pool.query(sql);
         return rows;
     }

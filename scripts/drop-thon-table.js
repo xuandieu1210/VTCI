@@ -1,4 +1,4 @@
-const mysql = require('mysql2/promise');
+const { Client } = require('pg');
 const dotenv = require('dotenv');
 const fs = require('fs');
 const path = require('path');
@@ -6,50 +6,35 @@ const path = require('path');
 dotenv.config();
 
 async function run() {
-    const connection = await mysql.createConnection({
-        host: process.env.DB_HOST,
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
-        database: process.env.DB_NAME,
-        port: Number(process.env.DB_PORT || 3306)
+    const connection = new Client({
+        host: process.env.DB_HOST || 'localhost',
+        user: process.env.DB_USER || 'postgres',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME || 'vien_thong_cong_ich',
+        port: Number(process.env.DB_PORT) || 5432
     });
+    await connection.connect();
 
     try {
-        const [fkRows] = await connection.query(
-            "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ho_gia_dinh' AND COLUMN_NAME = 'thon_id' AND REFERENCED_TABLE_NAME = 'danh_muc_thon'"
-        );
-
-        if (fkRows.length > 0) {
-            const fkName = fkRows[0].CONSTRAINT_NAME;
-            await connection.query('ALTER TABLE ho_gia_dinh DROP FOREIGN KEY ' + fkName);
-            console.log('Dropped foreign key:', fkName);
-        } else {
-            console.log('No foreign key from ho_gia_dinh.thon_id to danh_muc_thon found.');
-        }
-
-        const [columnRows] = await connection.query("SHOW COLUMNS FROM ho_gia_dinh LIKE 'thon_id'");
-        if (columnRows.length > 0) {
-            await connection.query('ALTER TABLE ho_gia_dinh DROP COLUMN thon_id');
-            console.log('Dropped column: ho_gia_dinh.thon_id');
-        } else {
-            console.log('Column ho_gia_dinh.thon_id not found.');
-        }
-
+        await connection.query('BEGIN');
+        await connection.query('ALTER TABLE ho_gia_dinh DROP COLUMN IF EXISTS thon_id');
         await connection.query('DROP TABLE IF EXISTS danh_muc_thon');
-        console.log('Dropped table: danh_muc_thon');
-
-        const [tableCheck] = await connection.query("SHOW TABLES LIKE 'danh_muc_thon'");
-        const [columnCheck] = await connection.query("SHOW COLUMNS FROM ho_gia_dinh LIKE 'thon_id'");
-        console.log('Verify table exists:', tableCheck.length > 0);
-        console.log('Verify column exists:', columnCheck.length > 0);
+        const tableCheck = await connection.query("SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'danh_muc_thon'");
+        const columnCheck = await connection.query("SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'ho_gia_dinh' AND column_name = 'thon_id'");
+        await connection.query('COMMIT');
+        console.log('Verify table exists:', tableCheck.rowCount > 0);
+        console.log('Verify column exists:', columnCheck.rowCount > 0);
 
         const statusPath = path.join(__dirname, '../exports/drop-thon-status.json');
         fs.mkdirSync(path.dirname(statusPath), { recursive: true });
         fs.writeFileSync(statusPath, JSON.stringify({
-            tableExists: tableCheck.length > 0,
-            thonColumnExists: columnCheck.length > 0,
+            tableExists: tableCheck.rowCount > 0,
+            thonColumnExists: columnCheck.rowCount > 0,
             updatedAt: new Date().toISOString()
         }, null, 2));
+    } catch (error) {
+        await connection.query('ROLLBACK').catch(() => {});
+        throw error;
     } finally {
         await connection.end();
     }

@@ -41,7 +41,7 @@ class CanhBao {
     }
 
     static async dong(id) {
-        const sql = 'UPDATE canh_bao SET trang_thai = "da_dong" WHERE id = ?';
+        const sql = "UPDATE canh_bao SET trang_thai = 'da_dong' WHERE id = ?";
         const [result] = await pool.query(sql, [id]);
         return result.affectedRows;
     }

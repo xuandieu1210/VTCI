@@ -10,7 +10,7 @@ class LoaiDichVu {
         const params = [];
 
         if (search) {
-            sql += " AND (ten_dich_vu LIKE ? OR ma_dich_vu LIKE ?)";
+            sql += " AND (ten_dich_vu ILIKE ? OR ma_dich_vu ILIKE ?)";
             params.push("%" + search + "%", "%" + search + "%");
         }
         if (trang_thai) {
@@ -54,7 +54,7 @@ class LoaiDichVu {
     }
 
     static async deactivate(id) {
-        const sql = 'UPDATE loai_dich_vu SET trang_thai = "ngung_hoat_dong" WHERE id = ?';
+        const sql = "UPDATE loai_dich_vu SET trang_thai = 'ngung_hoat_dong' WHERE id = ?";
         const [result] = await pool.query(sql, [id]);
         return result.affectedRows;
     }
@@ -71,7 +71,7 @@ class LoaiDichVu {
     }
 
     static async getAllActive() {
-        const sql = 'SELECT * FROM loai_dich_vu WHERE trang_thai = "dang_hoat_dong" ORDER BY ten_dich_vu';
+        const sql = "SELECT * FROM loai_dich_vu WHERE trang_thai = 'dang_hoat_dong' ORDER BY ten_dich_vu";
         const [rows] = await pool.query(sql);
         return rows;
     }

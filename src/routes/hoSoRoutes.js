@@ -7,6 +7,7 @@ const controller = require('../controllers/hoSoController');
 
 router.get('/', authenticate, controller.getAll);
 router.get('/download/:id', authenticate, controller.download);
+router.get('/preview/:id', authenticate, controller.preview);
 router.get('/:id', authenticate, controller.getById);
 router.post('/', authenticate, authorize('admin', 'manager', 'staff', 'vnpt_khu_vuc'), uploadHoSo.single('file'), controller.upload);
 router.put('/:id', authenticate, authorize('admin', 'manager', 'staff', 'vnpt_khu_vuc'), controller.update);

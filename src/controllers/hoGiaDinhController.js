@@ -42,6 +42,9 @@ exports.getDetail = async (req, res) => {
 exports.create = async (req, res) => {
     try {
         const payload = restrictVnptScope(req, req.body);
+        if (['day_du', 'tu_choi'].includes(payload.trang_thai_ho_so)) {
+            return res.status(400).json({ success: false, message: 'Trạng thái duyệt phải được cập nhật tại chức năng duyệt hồ sơ' });
+        }
         const { so_cmnd } = payload;
         const isDuplicate = await HoGiaDinh.checkDuplicateCMND(so_cmnd);
         if (isDuplicate) {
@@ -66,6 +69,9 @@ exports.update = async (req, res) => {
         }
 
         const payload = restrictVnptScope(req, req.body);
+        if (['day_du', 'tu_choi'].includes(payload.trang_thai_ho_so)) {
+            return res.status(400).json({ success: false, message: 'Trạng thái duyệt phải được cập nhật tại chức năng duyệt hồ sơ' });
+        }
         if (payload.so_cmnd) {
             const isDuplicate = await HoGiaDinh.checkDuplicateCMND(payload.so_cmnd, req.params.id);
             if (isDuplicate) {

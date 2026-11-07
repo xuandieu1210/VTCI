@@ -32,7 +32,7 @@
         <a href="/ho-gia-dinh/create" class="btn btn-primary"><i class="fas fa-plus"></i> Thêm mới</a>
     </div>
 </div>
-<form method="GET" class="row g-2 mb-3 align-items-end">
+<form method="GET" id="householdFilters" class="row g-2 mb-3 align-items-end">
     <div class="col-md-4">
         <label class="form-label small mb-1">Tìm kiếm</label>
         <input type="text" name="search" class="form-control" placeholder="CCCD, số thuê bao, tên..." value="<%= safeSearch %>">
@@ -66,6 +66,9 @@
         <label class="form-label small mb-1">Trạng thái</label>
         <select name="trang_thai_ho_so" class="form-select">
             <option value="" <%= safeTrangThaiHoSo === '' ? 'selected' : '' %>>Tất cả</option>
+            <option value="chua_co" <%= safeTrangThaiHoSo === 'chua_co' ? 'selected' : '' %>>Chưa có</option>
+            <option value="thieu" <%= safeTrangThaiHoSo === 'thieu' ? 'selected' : '' %>>Thiếu hồ sơ</option>
+            <option value="cho_duyet" <%= safeTrangThaiHoSo === 'cho_duyet' ? 'selected' : '' %>>Chờ duyệt</option>
             <option value="day_du" <%= safeTrangThaiHoSo === 'day_du' ? 'selected' : '' %>>Đã duyệt</option>
             <option value="tu_choi" <%= safeTrangThaiHoSo === 'tu_choi' ? 'selected' : '' %>>Từ chối</option>
         </select>
@@ -88,6 +91,7 @@
             <th>Dịch vụ truy nhập Internet BRCD mặt đất</th>
             <th>Số/Mã số thuê bao</th>
             <th>VNPT khu vực</th>
+            <th>Trạng thái hồ sơ</th>
             <th>Lý do từ chối</th>
             <th>Thao tác</th>
         </tr></thead>
@@ -99,12 +103,12 @@
                     const hasMobile = (item.dich_vu_di_dong || '').toLowerCase() === 'x' || serviceRows.some(s => {
                         const loai = String(s.loai_hinh || '').toLowerCase().trim();
                         const ma = String(s.ma_dich_vu || '').toLowerCase().trim();
-                        return loai === 'di_dong_mat_dat' || loai === 'vien_thong_di_dong_mat_dat' || ma === 'dmdd';
+                        return loai === 'di_dong_mat_dat' || loai === 'vien_thong_di_dong_mat_dat' || ['dmdd', 'dd'].includes(ma);
                     });
                     const hasInternet = (item.dich_vu_internet_brcd || '').toLowerCase() === 'x' || serviceRows.some(s => {
                         const loai = String(s.loai_hinh || '').toLowerCase().trim();
                         const ma = String(s.ma_dich_vu || '').toLowerCase().trim();
-                        return loai === 'internet_brcd' || loai === 'truy_nhap_internet_brcd_mat_dat' || loai === 'brcd' || ma === 'ibrcd';
+                        return loai === 'internet_brcd' || loai === 'truy_nhap_internet_brcd_mat_dat' || loai === 'brcd' || ['ibrcd', 'br'].includes(ma);
                     });
                     const soThueBao = item.so_thue_bao || item.so_thue_bao_chinh || (serviceRows[0] ? serviceRows[0].so_thue_bao : '') || '';
                     const currentUserRole = typeof user !== 'undefined' && user ? String(user.vai_tro || user.role || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
@@ -123,6 +127,7 @@
                         <td><%= hasInternet ? 'x' : '' %></td>
                         <td><%= soThueBao %></td>
                         <td><%= item.ten_khu_vuc || '' %></td>
+                        <td><%= ({ chua_co: 'Chưa có', thieu: 'Thiếu hồ sơ', cho_duyet: 'Chờ duyệt', day_du: 'Đã duyệt', tu_choi: 'Từ chối' })[item.trang_thai_ho_so] || 'Chưa có' %></td>
                         <td>
                             <% if (String(item.trang_thai_ho_so || '') === 'tu_choi') { %>
                                 <span class="text-danger"><%= item.ly_do_tu_choi || 'Không có lý do' %></span>
@@ -140,17 +145,25 @@
                     </tr>
                 <% }) %>
             <% } else { %>
-                <tr><td colspan="12" class="text-center">Không có dữ liệu</td></tr>
+                <tr><td colspan="13" class="text-center">Không có dữ liệu</td></tr>
             <% } %>
         </tbody>
     </table>
+</div>
+<div class="d-flex align-items-center gap-2 mt-3">
+    <label for="householdPageSize" class="form-label mb-0">Số dòng mỗi trang</label>
+    <select id="householdPageSize" name="limit" form="householdFilters" class="form-select form-select-sm w-auto" onchange="this.form.requestSubmit()">
+        <% [10, 20, 50, 100].forEach(size => { %>
+            <option value="<%= size %>" <%= Number(safePagination.limit || 20) === size ? 'selected' : '' %>><%= size %></option>
+        <% }); %>
+    </select>
 </div>
 <% if (safePagination && safePagination.totalPages > 1) { %>
     <%
         const currentPage = Number(safePagination.page || 1);
         const totalPages = Number(safePagination.totalPages || 1);
         const pageItems = [];
-        const buildPageLink = (page) => '?page=' + page + '&search=' + encodeURIComponent(safeSearch) + '&xa_id=' + encodeURIComponent(safeXaId) + '&vnpt_khu_vuc_id=' + encodeURIComponent(safeVnptKhuVucId) + '&thieu_ho_so=' + (safeThieuHoSoOnly ? '1' : '') + '&trang_thai_ho_so=' + encodeURIComponent(safeTrangThaiHoSo);
+        const buildPageLink = (page) => '?page=' + page + '&limit=' + encodeURIComponent(safePagination.limit || 20) + '&search=' + encodeURIComponent(safeSearch) + '&xa_id=' + encodeURIComponent(safeXaId) + '&vnpt_khu_vuc_id=' + encodeURIComponent(safeVnptKhuVucId) + '&thieu_ho_so=' + (safeThieuHoSoOnly ? '1' : '') + '&trang_thai_ho_so=' + encodeURIComponent(safeTrangThaiHoSo);
 
         if (totalPages <= 7) {
             for (let i = 1; i <= totalPages; i++) pageItems.push(i);

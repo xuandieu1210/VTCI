@@ -1,47 +1,38 @@
-// src/config/database.js
-const mysql = require('mysql2/promise');
-const dotenv = require('dotenv');
+const { Pool, types } = require('pg');
+require('dotenv').config();
 
-dotenv.config();
+types.setTypeParser(20, value => Number(value));
 
-const pool = mysql.createPool({
+const postgresPool = new Pool({
     host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
+    user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'vien_thong_cong_ich',
-    port: parseInt(process.env.DB_PORT) || 3306,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-    charset: 'utf8mb4'
+    port: Number(process.env.DB_PORT) || 5432,
+    max: 10
 });
 
-async function ensureRequiredColumns() {
-    try {
-        const [rows] = await pool.query('SHOW COLUMNS FROM ho_gia_dinh');
-        const columns = (rows || []).map(row => row.Field);
-
-        if (!columns.includes('ly_do_tu_choi')) {
-            await pool.query('ALTER TABLE ho_gia_dinh ADD COLUMN ly_do_tu_choi TEXT NULL AFTER trang_thai_ho_so');
-            console.log('✅ Added missing column: ho_gia_dinh.ly_do_tu_choi');
-        }
-
-        if (!columns.includes('trang_thai_ho_so') || !columns.some(column => column === 'trang_thai_ho_so')) {
-            await pool.query("ALTER TABLE ho_gia_dinh MODIFY trang_thai_ho_so VARCHAR(50) DEFAULT 'chua_co'");
-        }
-    } catch (error) {
-        console.warn('⚠️ Could not ensure ho_gia_dinh columns:', error.message);
-    }
+async function query(client, sql, params = []) {
+    let parameterIndex = 0;
+    const text = sql.replace(/\?/g, () => `$${++parameterIndex}`);
+    const insert = /^\s*INSERT\s+INTO\b/i.test(text);
+    const result = await client.query(insert ? `${text.trim().replace(/;$/, '')} RETURNING id` : text, params);
+    if (insert) return [{ insertId: result.rows[0]?.id, affectedRows: result.rowCount }];
+    if (result.command === 'UPDATE' || result.command === 'DELETE') return [{ affectedRows: result.rowCount }];
+    return [result.rows];
 }
 
-pool.getConnection()
-    .then(async (connection) => {
-        console.log('✅ Database connected successfully');
-        connection.release();
-        await ensureRequiredColumns();
-    })
-    .catch(err => {
-        console.error('❌ Database connection failed:', err.message);
-    });
-
-module.exports = pool;
+module.exports = {
+    query: (sql, params) => query(postgresPool, sql, params),
+    getConnection: async () => {
+        const client = await postgresPool.connect();
+        return {
+            query: (sql, params) => query(client, sql, params),
+            beginTransaction: () => client.query('BEGIN'),
+            commit: () => client.query('COMMIT'),
+            rollback: () => client.query('ROLLBACK'),
+            release: () => client.release()
+        };
+    },
+    end: () => postgresPool.end()
+};

@@ -251,7 +251,7 @@ exports.importExcel = async (req, res) => {
                         throw new Error('Thieu thong tin bat buoc: Ten chu ho va CMND');
                     }
 
-                    const isDuplicate = await HoGiaDinh.checkDuplicateCMND(cmnd);
+                    const isDuplicate = await HoGiaDinh.checkDuplicateCMND(cmnd, null, connection);
                     if (isDuplicate) {
                         throw new Error('CMND ' + cmnd + ' da ton tai');
                     }
@@ -308,7 +308,7 @@ exports.importExcel = async (req, res) => {
                         ghi_chu: ghiChu
                     };
 
-                    const hoGiaDinhId = await HoGiaDinh.create(hoData);
+                    const hoGiaDinhId = await HoGiaDinh.create(hoData, connection);
 
                     if (soThueBao) {
                         if (!loaiDichVuId) {

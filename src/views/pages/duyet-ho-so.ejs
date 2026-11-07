@@ -32,7 +32,7 @@
 
     <% const safePagination = typeof pagination !== 'undefined' ? pagination : {}; %>
     <% const filterQuery = 'limit=' + encodeURIComponent(safePagination.limit || 20) + '&search=' + encodeURIComponent(search || '') + '&xa_id=' + encodeURIComponent(xaId || '') + '&trang_thai_ho_so=' + encodeURIComponent(trangThaiHoSo || ''); %>
-    <form method="GET" action="/duyet-ho-so" class="row g-2 align-items-end mb-3">
+    <form method="GET" action="/duyet-ho-so" id="approvalFilters" class="row g-2 align-items-end mb-3">
         <div class="col-12 col-md-5 col-lg-4">
             <label for="approvalSearch" class="form-label">Tìm kiếm</label>
             <input type="search" id="approvalSearch" name="search" class="form-control" value="<%= search || '' %>" placeholder="Mã hộ, tên chủ hộ, CCCD">
@@ -93,9 +93,9 @@
                         <tbody>
                             <% data.forEach(function(ho) { %>
                                 <% var docStatus = ho.trang_thai_ho_so || 'chua_co'; %>
-                                <tr class="<%= docStatus === 'can_bo_sung' ? 'table-warning' : '' %>">
+                                <tr class="<%= docStatus === 'cho_duyet' ? 'table-warning' : '' %>">
                                     <td>
-                                        <input type="checkbox" name="selectedIds" value="<%= ho.id %>" class="household-checkbox" />
+                                        <input type="checkbox" name="selectedIds" value="<%= ho.id %>" class="household-checkbox" <%= docStatus !== 'cho_duyet' ? 'disabled' : '' %> aria-label="Chọn hộ <%= ho.ma_ho || ho.id %>" />
                                     </td>
                                     <td><%= ho.ma_ho || '' %></td>
                                     <td><%= ho.ten_chu_ho || '' %></td>
@@ -107,9 +107,10 @@
                                                 <% ho.ho_so.forEach(function(file) { %>
                                                     <li>
                                                         <%= file.loai_ho_so || 'Hồ sơ' %>
-                                                        <% if (file.nam_ho_so) { %>
+                                                        <% if (file.nam_ho_so && file.loai_ho_so !== 'giay_cccd') { %>
                                                             (<%= file.nam_ho_so %>)
                                                         <% } %>
+                                                        <button type="button" class="btn btn-sm btn-outline-primary ms-2" data-bs-toggle="modal" data-bs-target="#previewModal" data-file-id="<%= file.id %>" data-file-name="<%= file.ten_file || file.loai_ho_so || 'Hồ sơ' %>" title="Xem hồ sơ" aria-label="Xem hồ sơ <%= file.loai_ho_so || '' %>"><i class="fas fa-eye"></i></button>
                                                         <a href="/api/ho-so/download/<%= file.id %>" target="_blank" class="ms-2 text-primary">Tải</a>
                                                     </li>
                                                 <% }); %>
@@ -120,13 +121,11 @@
                                     </td>
                                     <td>
                                         <% if (docStatus === 'day_du') { %>
-                                            <span class="badge bg-success">Đầy đủ</span>
+                                            <span class="badge bg-success">Đã duyệt</span>
                                         <% } else if (docStatus === 'thieu') { %>
                                             <span class="badge bg-warning text-dark">Thiếu</span>
-                                        <% } else if (docStatus === 'can_bo_sung') { %>
-                                            <span class="badge bg-warning text-dark">Đã chỉnh sửa</span>
-                                        <% } else if (docStatus === 'het_han') { %>
-                                            <span class="badge bg-secondary">Hết hạn</span>
+                                        <% } else if (docStatus === 'cho_duyet') { %>
+                                            <span class="badge bg-info text-dark">Chờ duyệt</span>
                                         <% } else if (docStatus === 'tu_choi') { %>
                                             <span class="badge bg-danger">Từ chối</span>
                                         <% } else { %>
@@ -144,7 +143,18 @@
             </div>
         </div>
 
-        <% if (safePagination && safePagination.totalPages > 1) { %>
+    <% } %>
+
+    <div class="d-flex align-items-center gap-2 mt-3">
+        <label for="approvalPageSize" class="form-label mb-0">Số dòng mỗi trang</label>
+        <select id="approvalPageSize" name="limit" form="approvalFilters" class="form-select form-select-sm w-auto" onchange="this.form.requestSubmit()">
+            <% [10, 20, 50, 100].forEach(function(size) { %>
+                <option value="<%= size %>" <%= Number(safePagination.limit || 20) === size ? 'selected' : '' %>><%= size %></option>
+            <% }); %>
+        </select>
+    </div>
+
+    <% if (safePagination && safePagination.totalPages > 1) { %>
             <%
                 const currentPage = Number(safePagination.page || 1);
                 const totalPages = Number(safePagination.totalPages || 1);
@@ -201,12 +211,78 @@
                     </li>
                 </ul>
             </nav>
-        <% } %>
     <% } %>
+</div>
+
+<div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-break" id="previewModalTitle">Xem hồ sơ</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+            </div>
+            <div class="modal-body">
+                <div id="previewMessage" class="text-muted" role="status">Đang tải hồ sơ...</div>
+                <iframe id="previewFrame" title="Nội dung hồ sơ" class="w-100 border-0 d-none" style="height: min(70vh, 760px);"></iframe>
+            </div>
+            <div class="modal-footer">
+                <a id="previewDownload" class="btn btn-outline-primary" target="_blank" rel="noopener"><i class="fas fa-download"></i> Tải xuống</a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        const previewModal = document.getElementById('previewModal');
+        const previewFrame = document.getElementById('previewFrame');
+        const previewMessage = document.getElementById('previewMessage');
+        const previewTitle = document.getElementById('previewModalTitle');
+        const previewDownload = document.getElementById('previewDownload');
+        let previewUrl = null;
+        let previewRequest = null;
+
+        const clearPreview = function () {
+            if (previewRequest) previewRequest.abort();
+            previewRequest = null;
+            previewFrame.removeAttribute('src');
+            previewFrame.classList.add('d-none');
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+            previewUrl = null;
+        };
+
+        previewModal.addEventListener('show.bs.modal', async function (event) {
+            clearPreview();
+            const button = event.relatedTarget;
+            const fileId = button.dataset.fileId;
+            previewTitle.textContent = button.dataset.fileName || 'Xem hồ sơ';
+            previewDownload.href = '/api/ho-so/download/' + encodeURIComponent(fileId);
+            previewMessage.textContent = 'Đang tải hồ sơ...';
+            previewMessage.classList.remove('d-none');
+            const request = new AbortController();
+            previewRequest = request;
+            try {
+                const response = await fetch('/api/ho-so/preview/' + encodeURIComponent(fileId), { signal: request.signal });
+                if (!response.ok) {
+                    const error = await response.json().catch(function () { return {}; });
+                    throw new Error(error.message || 'Không thể xem tệp hồ sơ.');
+                }
+                const file = await response.blob();
+                if (request.signal.aborted) return;
+                previewUrl = URL.createObjectURL(file);
+                if (file.type.startsWith('text/html')) previewFrame.setAttribute('sandbox', '');
+                else previewFrame.removeAttribute('sandbox');
+                previewFrame.src = previewUrl;
+                previewFrame.classList.remove('d-none');
+                previewMessage.classList.add('d-none');
+            } catch (error) {
+                if (error.name !== 'AbortError') previewMessage.textContent = error.message || 'Không thể xem tệp hồ sơ.';
+            }
+        });
+
+        previewModal.addEventListener('hidden.bs.modal', clearPreview);
+
         const selectAll = document.getElementById('selectAllHouseholds');
         const checkboxes = document.querySelectorAll('.household-checkbox');
         const forms = [

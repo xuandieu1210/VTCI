@@ -4,6 +4,31 @@ const router = express.Router();
 const { requireLogin, requireRole } = require('../middlewares/auth');
 const pool = require('../config/database');
 const axios = require('axios');
+const { REQUIRED_DOCUMENT_TYPES, missingDocumentAggregate, householdDocumentStatus } = require('../utils/documentStatus');
+
+const pageSizes = [10, 20, 50, 100];
+const getPageSize = (value) => pageSizes.includes(Number(value)) ? Number(value) : 20;
+
+async function reviewDocuments(ids, status, reason = null) {
+    const connection = await pool.getConnection();
+    const placeholders = ids.map(() => '?').join(',');
+    try {
+        await connection.beginTransaction();
+        await connection.query(`SELECT id FROM ho_gia_dinh WHERE id IN (${placeholders}) ORDER BY id FOR UPDATE`, ids);
+        const [result] = await connection.query(`
+            UPDATE ho_gia_dinh h
+            SET trang_thai_ho_so = ?, nam_xet_duyet = EXTRACT(YEAR FROM CURRENT_DATE)::integer, ly_do_tu_choi = ?, updated_at = NOW()
+            WHERE h.id IN (${placeholders}) AND ${householdDocumentStatus('h')} = 'cho_duyet'
+        `, [status, reason, ...ids]);
+        await connection.commit();
+        return result.affectedRows;
+    } catch (error) {
+        await connection.rollback().catch(() => {});
+        throw error;
+    } finally {
+        connection.release();
+    }
+}
 
 axios.interceptors.request.use((config) => {
     const targetPort = process.env.PORT || 3000;
@@ -220,8 +245,8 @@ router.get('/logout', (req, res) => {
 // ====== HO GIA DINH ======
 router.get('/ho-gia-dinh', requireLogin, async (req, res) => {
     try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = 20;
+        const page = Number.isSafeInteger(Number(req.query.page)) && Number(req.query.page) > 0 ? Number(req.query.page) : 1;
+        const limit = getPageSize(req.query.limit);
         const offset = (page - 1) * limit;
         const search = req.query.search || '';
         const xaId = req.query.xa_id || '';
@@ -237,29 +262,20 @@ router.get('/ho-gia-dinh', requireLogin, async (req, res) => {
         ]);
 
         if (thieuHoSoOnly) {
-            const [namHoSoColumns] = await pool.query("SHOW COLUMNS FROM ho_so_dinh_kem LIKE 'nam_ho_so'");
-            const yearExpr = namHoSoColumns.length > 0 ? 'COALESCE(hs.nam_ho_so, YEAR(hs.created_at))' : 'YEAR(hs.created_at)';
-            const requiredDocTypes = [
-                'giay_chung_nhan_ho_ngheo_can_ngheo',
-                'don_dang_ky_su_dung',
-                'hop_dong_cung_cap_dv',
-                'giay_cccd',
-                'giay_cam_ket'
-            ];
-            const havingCondition = requiredDocTypes
-                .map((docType) => `SUM(CASE WHEN hs.loai_ho_so = '${docType}' AND ${yearExpr} = YEAR(CURDATE()) THEN 1 ELSE 0 END) = 0`)
+            const havingCondition = REQUIRED_DOCUMENT_TYPES
+                .map((docType) => missingDocumentAggregate(docType, 'EXTRACT(YEAR FROM CURRENT_DATE)'))
                 .join(' OR ');
 
             let whereSql = 'WHERE 1=1';
             const whereParams = [];
             if (search) {
-                whereSql += ' AND (h.ten_chu_ho LIKE ? OR h.so_cmnd LIKE ? OR h.ma_ho LIKE ? OR tb.so_thue_bao LIKE ? OR tb.ten_chu_thue_bao LIKE ?)';
+                whereSql += ' AND (h.ten_chu_ho ILIKE ? OR h.so_cmnd ILIKE ? OR h.ma_ho ILIKE ? OR tb.so_thue_bao ILIKE ? OR tb.ten_chu_thue_bao ILIKE ?)';
                 const s = '%' + search + '%';
                 whereParams.push(s, s, s, s, s);
             }
             if (xaId) { whereSql += ' AND h.xa_id = ?'; whereParams.push(xaId); }
             if (vnptKhuVucId) { whereSql += ' AND h.vnpt_khu_vuc_id = ?'; whereParams.push(vnptKhuVucId); }
-            if (trangThaiHoSo) { whereSql += ' AND h.trang_thai_ho_so = ?'; whereParams.push(trangThaiHoSo); }
+            if (trangThaiHoSo) { whereSql += ` AND ${householdDocumentStatus('h')} = ?`; whereParams.push(trangThaiHoSo); }
 
             const baseSql = `
                 FROM ho_gia_dinh h
@@ -270,7 +286,7 @@ router.get('/ho-gia-dinh', requireLogin, async (req, res) => {
                 LEFT JOIN loai_dich_vu ldv ON tb.loai_dich_vu_id = ldv.id
                 LEFT JOIN ho_so_dinh_kem hs ON hs.ho_gia_dinh_id = h.id
                 ${whereSql}
-                GROUP BY h.id
+                GROUP BY h.id, x.id, l.id, v.id
                 HAVING ${havingCondition}
             `;
 
@@ -278,12 +294,12 @@ router.get('/ho-gia-dinh', requireLogin, async (req, res) => {
             const total = countRows[0]?.total || 0;
             const [rows] = await pool.query(
                 `SELECT
-                    h.*, x.ma_xa, x.ten_xa, x.ten_xa_cu,
+                    h.*, ${householdDocumentStatus('h')} AS trang_thai_ho_so, x.ma_xa, x.ten_xa, x.ten_xa_cu,
                     l.ten_loai AS ten_loai_doi_tuong,
                     v.ten_khu_vuc,
                     MAX(tb.so_thue_bao) AS so_thue_bao,
-                    CASE WHEN SUM(CASE WHEN LOWER(COALESCE(ldv.loai_hinh, '')) IN ('di_dong_mat_dat', 'vien_thong_di_dong_mat_dat') OR LOWER(COALESCE(ldv.ma_dich_vu, '')) = 'dmdd' THEN 1 ELSE 0 END) > 0 THEN 'x' ELSE '' END AS dich_vu_di_dong,
-                    CASE WHEN SUM(CASE WHEN LOWER(COALESCE(ldv.loai_hinh, '')) IN ('internet_brcd', 'truy_nhap_internet_brcd_mat_dat', 'brcd') OR LOWER(COALESCE(ldv.ma_dich_vu, '')) = 'ibrcd' THEN 1 ELSE 0 END) > 0 THEN 'x' ELSE '' END AS dich_vu_internet_brcd
+                    CASE WHEN SUM(CASE WHEN LOWER(TRIM(COALESCE(ldv.loai_hinh, ''))) IN ('di_dong_mat_dat', 'vien_thong_di_dong_mat_dat') OR LOWER(TRIM(COALESCE(ldv.ma_dich_vu, ''))) IN ('dmdd', 'dd') THEN 1 ELSE 0 END) > 0 THEN 'x' ELSE '' END AS dich_vu_di_dong,
+                    CASE WHEN SUM(CASE WHEN LOWER(TRIM(COALESCE(ldv.loai_hinh, ''))) IN ('internet_brcd', 'truy_nhap_internet_brcd_mat_dat', 'brcd') OR LOWER(TRIM(COALESCE(ldv.ma_dich_vu, ''))) IN ('ibrcd', 'br') THEN 1 ELSE 0 END) > 0 THEN 'x' ELSE '' END AS dich_vu_internet_brcd
                  ${baseSql} ORDER BY h.created_at DESC LIMIT ? OFFSET ?`,
                 [...whereParams, limit, offset]
             );
@@ -293,6 +309,7 @@ router.get('/ho-gia-dinh', requireLogin, async (req, res) => {
         } else {
             const query = new URLSearchParams({
                 page: String(page),
+                limit: String(limit),
                 search,
                 xa_id: xaId,
                 vnpt_khu_vuc_id: vnptKhuVucId,
@@ -794,8 +811,7 @@ router.get('/duyet-ho-so', requireLogin, requireRole('admin', 'vnpt_khu_vuc'), a
         { value: 'day_du', label: 'Đã duyệt' },
         { value: 'chua_co', label: 'Chưa có' },
         { value: 'thieu', label: 'Thiếu hồ sơ' },
-        { value: 'can_bo_sung', label: 'Đã chỉnh sửa' },
-        { value: 'het_han', label: 'Hết hạn' },
+        { value: 'cho_duyet', label: 'Chờ duyệt' },
         { value: 'tu_choi', label: 'Từ chối' }
     ];
     const allowedStatuses = new Set(statusOptions.map(option => option.value));
@@ -804,8 +820,8 @@ router.get('/duyet-ho-so', requireLogin, requireRole('admin', 'vnpt_khu_vuc'), a
         : '';
 
     try {
-        const page = Number(req.query.page) > 0 ? Number(req.query.page) : 1;
-        const limit = Number(req.query.limit) > 0 ? Number(req.query.limit) : 20;
+        const page = Number.isSafeInteger(Number(req.query.page)) && Number(req.query.page) > 0 ? Number(req.query.page) : 1;
+        const limit = getPageSize(req.query.limit);
         const offset = (page - 1) * limit;
         const isVnptUser = hasRole(req.session.user, 'vnpt_khu_vuc');
         const [xaRows] = await pool.query(
@@ -814,7 +830,7 @@ router.get('/duyet-ho-so', requireLogin, requireRole('admin', 'vnpt_khu_vuc'), a
         );
 
         let sql = `
-            SELECT h.*, x.ten_xa
+            SELECT h.*, ${householdDocumentStatus('h')} AS trang_thai_ho_so, x.ten_xa
             FROM ho_gia_dinh h
             LEFT JOIN danh_muc_xa x ON h.xa_id = x.id
             WHERE 1=1
@@ -829,8 +845,8 @@ router.get('/duyet-ho-so', requireLogin, requireRole('admin', 'vnpt_khu_vuc'), a
         const countParams = [];
 
         if (search) {
-            sql += ' AND (h.ma_ho LIKE ? OR h.ten_chu_ho LIKE ? OR h.so_cmnd LIKE ?)';
-            countSql += ' AND (h.ma_ho LIKE ? OR h.ten_chu_ho LIKE ? OR h.so_cmnd LIKE ?)';
+            sql += ' AND (h.ma_ho ILIKE ? OR h.ten_chu_ho ILIKE ? OR h.so_cmnd ILIKE ?)';
+            countSql += ' AND (h.ma_ho ILIKE ? OR h.ten_chu_ho ILIKE ? OR h.so_cmnd ILIKE ?)';
             const searchPattern = '%' + search + '%';
             params.push(searchPattern, searchPattern, searchPattern);
             countParams.push(searchPattern, searchPattern, searchPattern);
@@ -844,13 +860,13 @@ router.get('/duyet-ho-so', requireLogin, requireRole('admin', 'vnpt_khu_vuc'), a
         }
 
         if (trangThaiHoSo) {
-            sql += ' AND h.trang_thai_ho_so = ?';
-            countSql += ' AND h.trang_thai_ho_so = ?';
+            sql += ` AND ${householdDocumentStatus('h')} = ?`;
+            countSql += ` AND ${householdDocumentStatus('h')} = ?`;
             params.push(trangThaiHoSo);
             countParams.push(trangThaiHoSo);
         } else {
-            sql += " AND COALESCE(h.trang_thai_ho_so, 'chua_co') <> ?";
-            countSql += " AND COALESCE(h.trang_thai_ho_so, 'chua_co') <> ?";
+            sql += ` AND ${householdDocumentStatus('h')} <> ?`;
+            countSql += ` AND ${householdDocumentStatus('h')} <> ?`;
             params.push('day_du');
             countParams.push('day_du');
         }
@@ -932,7 +948,7 @@ router.post('/duyet-ho-so/approve', requireLogin, requireRole('admin', 'vnpt_khu
             ? req.body.selectedIds
             : (req.body.selectedIds ? String(req.body.selectedIds).split(',') : []);
 
-        const normalized = selected.map(item => Number(item)).filter(item => Number.isInteger(item) && item > 0);
+        const normalized = [...new Set(selected.map(item => Number(item)).filter(item => Number.isInteger(item) && item > 0))];
         if (!normalized.length) {
             return res.redirect('/duyet-ho-so?error=Vui%20long%20chon%20it%20nhat%20m%E1%BB%99t%20h%E1%BB%99%20gia%20%C4%91%C3%ACnh');
         }
@@ -959,14 +975,10 @@ router.post('/duyet-ho-so/approve', requireLogin, requireRole('admin', 'vnpt_khu
             }
         }
 
-        const placeholders = allowedIds.map(() => '?').join(',');
-        await pool.query(`
-            UPDATE ho_gia_dinh
-            SET trang_thai_ho_so = 'day_du', updated_at = NOW()
-            WHERE id IN (${placeholders})
-        `, allowedIds);
-
-        res.redirect('/duyet-ho-so?message=Duyet%20ho%20so%20thanh%20cong');
+        const affected = await reviewDocuments(allowedIds, 'day_du');
+        if (!affected) return res.redirect('/duyet-ho-so?error=' + encodeURIComponent('Chỉ duyệt được hồ sơ đã đủ giấy tờ và đang chờ duyệt'));
+        const message = affected < allowedIds.length ? 'Đã duyệt các hồ sơ đủ điều kiện; các hồ sơ khác không được duyệt' : 'Duyệt hồ sơ thành công';
+        res.redirect('/duyet-ho-so?message=' + encodeURIComponent(message));
     } catch (error) {
         res.redirect('/duyet-ho-so?error=' + encodeURIComponent(error.message || 'Loi duyet ho so'));
     }
@@ -978,7 +990,7 @@ router.post('/duyet-ho-so/reject', requireLogin, requireRole('admin', 'vnpt_khu_
             ? req.body.selectedIds
             : (req.body.selectedIds ? String(req.body.selectedIds).split(',') : []);
 
-        const normalized = selected.map(item => Number(item)).filter(item => Number.isInteger(item) && item > 0);
+        const normalized = [...new Set(selected.map(item => Number(item)).filter(item => Number.isInteger(item) && item > 0))];
         if (!normalized.length) {
             return res.redirect('/duyet-ho-so?error=Vui%20long%20chon%20it%20nhat%20m%E1%BB%99t%20h%E1%BB%99%20gia%20%C4%91%C3%ACnh');
         }
@@ -1010,30 +1022,10 @@ router.post('/duyet-ho-so/reject', requireLogin, requireRole('admin', 'vnpt_khu_
             }
         }
 
-        const rejectedIds = (await pool.query(`
-            SELECT id
-            FROM ho_gia_dinh
-            WHERE id IN (${allowedIds.map(() => '?').join(',')}) AND trang_thai_ho_so = 'tu_choi'
-        `, allowedIds))[0].map(row => Number(row.id));
-        const finalIds = allowedIds.filter(id => !rejectedIds.includes(id));
-
-        if (!finalIds.length) {
-            return res.redirect('/duyet-ho-so?error=Mot%20so%20ho%20so%20da%20tu%20choi%2C%20khong%20the%20tu%20choi%20lai');
-        }
-
-        const placeholders = finalIds.map(() => '?').join(',');
-        const updateValues = [reason, 'tu_choi', ...finalIds];
-        await pool.query(`
-            UPDATE ho_gia_dinh
-            SET ly_do_tu_choi = ?, trang_thai_ho_so = ?, updated_at = NOW()
-            WHERE id IN (${placeholders})
-        `, updateValues);
-
-        const skippedCount = allowedIds.length - finalIds.length;
-        const redirectMessage = skippedCount > 0
-            ? 'Tu%20choi%20ho%20so%20thanh%20cong.%20Mot%20so%20ho%20so%20da%20tu%20choi%20nen%20khong%20duoc%20tu%20choi%20lai'
-            : 'Tu%20choi%20ho%20so%20thanh%20cong';
-        res.redirect('/duyet-ho-so?message=' + redirectMessage);
+        const affected = await reviewDocuments(allowedIds, 'tu_choi', reason);
+        if (!affected) return res.redirect('/duyet-ho-so?error=' + encodeURIComponent('Chỉ từ chối được hồ sơ đã đủ giấy tờ và đang chờ duyệt'));
+        const message = affected < allowedIds.length ? 'Đã từ chối các hồ sơ đủ điều kiện; các hồ sơ khác không được xử lý' : 'Từ chối hồ sơ thành công';
+        res.redirect('/duyet-ho-so?message=' + encodeURIComponent(message));
     } catch (error) {
         res.redirect('/duyet-ho-so?error=' + encodeURIComponent(error.message || 'Loi tu choi ho so'));
     }

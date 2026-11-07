@@ -132,14 +132,14 @@ const years = Array.from({ length: 7 }, (_, i) => currentYear - 3 + i);
                         <% documentTypes.forEach(docType => { %>
                             <div class="col-md-6 mb-4">
                                 <label class="form-label fw-bold"><%= docType.label %></label>
-                                <div class="mb-2">
+                                <% if (docType.value !== 'giay_cccd') { %><div class="mb-2">
                                     <label class="form-label small">Năm hồ sơ</label>
                                     <select class="form-control form-select document-year-select" data-doc-type="<%= docType.value %>">
                                         <% years.forEach(year => { %>
                                             <option value="<%= year %>" <%= year === currentYear ? 'selected' : '' %>><%= year %></option>
                                         <% }); %>
                                     </select>
-                                </div>
+                                </div><% } %>
                                 <input type="file" class="form-control document-file-input" data-doc-type="<%= docType.value %>" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
                             </div>
                         <% }); %>

@@ -131,7 +131,7 @@
                                         <% ho.ho_so.forEach(file => { %>
                                             <tr>
                                                 <td><%= file.loai_ho_so || '' %></td>
-                                                <td><%= file.nam_ho_so || '' %></td>
+                                                <td><%= file.loai_ho_so === 'giay_cccd' ? '' : (file.nam_ho_so || '') %></td>
                                                 <td>
                                                     <a href="/api/ho-so/download/<%= file.id %>" target="_blank" class="btn btn-sm btn-outline-primary">Tải xuống</a>
                                                 </td>

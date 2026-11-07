@@ -97,7 +97,7 @@ const toDateInput = (value) => {
                 </div>
                 <div class="col-md-6 mb-3">
                     <label class="form-label">Trang thai ho so</label>
-                    <input type="text" class="form-control" value="<%= ho.trang_thai_ho_so || 'chua_co' %>" readonly>
+                    <input type="text" class="form-control" value="<%= ({ chua_co: 'Chưa có', thieu: 'Thiếu hồ sơ', cho_duyet: 'Chờ duyệt', day_du: 'Đã duyệt', tu_choi: 'Từ chối' })[ho.trang_thai_ho_so] || 'Chưa có' %>" readonly>
                     <input type="hidden" name="trang_thai_ho_so" value="<%= ho.trang_thai_ho_so || 'chua_co' %>">
                 </div>
                 <div class="col-12 mb-3">
@@ -170,7 +170,7 @@ const toDateInput = (value) => {
                             <div class="border rounded p-2 bg-light d-flex justify-content-between align-items-center mb-2">
                                 <div>
                                     <div class="fw-semibold"><%= existing.ten_file %></div>
-                                    <small class="text-muted">Năm: <%= existing.nam_ho_so || currentYear %> • Đã lưu: <%= existing.created_at ? new Date(existing.created_at).toLocaleDateString('vi-VN') : '' %></small>
+                                    <small class="text-muted"><% if (docType.value !== 'giay_cccd') { %>Năm: <%= existing.nam_ho_so || currentYear %> • <% } %>Đã lưu: <%= existing.created_at ? new Date(existing.created_at).toLocaleDateString('vi-VN') : '' %></small>
                                 </div>
                                 <div class="btn-group btn-group-sm">
                                     <a class="btn btn-outline-primary" href="/api/ho-so/download/<%= existing.id %>" target="_blank">Tải</a>
@@ -184,14 +184,14 @@ const toDateInput = (value) => {
                     <form class="upload-doc-form" data-doc-type="<%= docType.value %>" enctype="multipart/form-data">
                         <input type="hidden" name="ho_gia_dinh_id" value="<%= ho.id %>">
                         <input type="hidden" name="loai_ho_so" value="<%= docType.value %>">
-                        <div class="mb-2">
+                        <% if (docType.value !== 'giay_cccd') { %><div class="mb-2">
                             <label class="form-label small">Năm hồ sơ</label>
                             <select name="nam_ho_so" class="form-control form-select">
                                 <% years.forEach(year => { %>
                                     <option value="<%= year %>" <%= year === currentYear ? 'selected' : '' %>><%= year %></option>
                                 <% }); %>
                             </select>
-                        </div>
+                        </div><% } %>
                         <div class="input-group">
                             <input type="file" name="file" class="form-control" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
                             <button class="btn btn-primary" type="submit">Lưu</button>

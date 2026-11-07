@@ -1,4 +1,4 @@
-const mysql = require('mysql2/promise');
+const { Client } = require('pg');
 const dotenv = require('dotenv');
 
 dotenv.config();
@@ -109,49 +109,51 @@ const getCapHanhChinh = (tenXa) => {
 };
 
 async function importDanhMucXa() {
-  const connection = await mysql.createConnection({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME
+  const connection = new Client({
+    host: process.env.DB_HOST || 'localhost',
+    port: Number(process.env.DB_PORT) || 5432,
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'vien_thong_cong_ich'
   });
+  await connection.connect();
 
   let inserted = 0;
   let updated = 0;
 
   try {
-    await connection.beginTransaction();
+    await connection.query('BEGIN');
 
     for (const item of xaList) {
       const capHanhChinh = getCapHanhChinh(item.ten_xa);
-      const [result] = await connection.query(
+      const result = await connection.query(
         `INSERT INTO danh_muc_xa (ma_xa, ten_xa, cap_hanh_chinh, trang_thai)
-         VALUES (?, ?, ?, 'dang_hoat_dong')
-         ON DUPLICATE KEY UPDATE
-           ten_xa = VALUES(ten_xa),
-           cap_hanh_chinh = VALUES(cap_hanh_chinh),
-           trang_thai = 'dang_hoat_dong'`,
+         VALUES ($1, $2, $3, 'dang_hoat_dong')
+         ON CONFLICT (ma_xa) DO UPDATE SET
+           ten_xa = EXCLUDED.ten_xa,
+           cap_hanh_chinh = EXCLUDED.cap_hanh_chinh,
+           trang_thai = 'dang_hoat_dong'
+         RETURNING (xmax = 0) AS inserted`,
         [item.ma_xa, item.ten_xa, capHanhChinh]
       );
 
-      if (result.affectedRows === 1) inserted += 1;
-      if (result.affectedRows === 2) updated += 1;
+      if (result.rows[0].inserted) inserted += 1;
+      else updated += 1;
     }
 
-    await connection.commit();
-
-    const [countRows] = await connection.query(
-      'SELECT COUNT(*) AS total FROM danh_muc_xa WHERE ma_xa IN (?)',
+    const countRows = await connection.query(
+      'SELECT COUNT(*) AS total FROM danh_muc_xa WHERE ma_xa = ANY($1)',
       [xaList.map((x) => x.ma_xa)]
     );
+    await connection.query('COMMIT');
 
     console.log('Import danh_muc_xa thanh cong');
     console.log('So ban ghi dau vao:', xaList.length);
     console.log('Them moi:', inserted);
     console.log('Cap nhat:', updated);
-    console.log('Tong ma_xa da co trong DB:', Number(countRows[0]?.total || 0));
+    console.log('Tong ma_xa da co trong DB:', Number(countRows.rows[0]?.total || 0));
   } catch (error) {
-    await connection.rollback();
+    await connection.query('ROLLBACK');
     console.error('Import danh_muc_xa that bai:', error.message);
     process.exitCode = 1;
   } finally {
@@ -159,4 +161,7 @@ async function importDanhMucXa() {
   }
 }
 
-importDanhMucXa();
+importDanhMucXa().catch(error => {
+  console.error('Import danh_muc_xa that bai:', error.message);
+  process.exitCode = 1;
+});

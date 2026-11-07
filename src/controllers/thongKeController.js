@@ -3,14 +3,7 @@ const pool = require('../config/database');
 const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
-
-const REQUIRED_DOC_TYPES = [
-    'giay_chung_nhan_ho_ngheo_can_ngheo',
-    'don_dang_ky_su_dung',
-    'hop_dong_cung_cap_dv',
-    'giay_cccd',
-    'giay_cam_ket'
-];
+const { ANNUAL_DOCUMENT_TYPES, REQUIRED_DOCUMENT_TYPES, missingDocumentAggregate } = require('../utils/documentStatus');
 
 const parseYear = (raw) => {
     const year = Number(raw);
@@ -48,12 +41,12 @@ const buildNewSubscriberQuery = ({ year, month }) => {
         LEFT JOIN ho_gia_dinh h ON tb.ho_gia_dinh_id = h.id
         LEFT JOIN danh_muc_xa x ON h.xa_id = x.id
         LEFT JOIN vnpt_khu_vuc v ON h.vnpt_khu_vuc_id = v.id
-        WHERE YEAR(tb.created_at) = ?
+        WHERE EXTRACT(YEAR FROM tb.created_at) = ?
     `;
     const params = [year];
 
     if (month) {
-        sql += ' AND MONTH(tb.created_at) = ?';
+        sql += ' AND EXTRACT(MONTH FROM tb.created_at) = ?';
         params.push(month);
     }
 
@@ -62,15 +55,12 @@ const buildNewSubscriberQuery = ({ year, month }) => {
 };
 
 const getMissingDocRows = async (connection, year) => {
-    const [namHoSoColumns] = await connection.query("SHOW COLUMNS FROM ho_so_dinh_kem LIKE 'nam_ho_so'");
-    const yearExpr = namHoSoColumns.length > 0 ? 'COALESCE(hs.nam_ho_so, YEAR(hs.created_at))' : 'YEAR(hs.created_at)';
-
-    const missingExpr = REQUIRED_DOC_TYPES.map((docType) =>
-        `CASE WHEN SUM(CASE WHEN hs.loai_ho_so = '${docType}' AND ${yearExpr} = ? THEN 1 ELSE 0 END) = 0 THEN 1 ELSE 0 END`
+    const missingExpr = REQUIRED_DOCUMENT_TYPES.map((docType) =>
+        `CASE WHEN ${missingDocumentAggregate(docType, '?')} THEN 1 ELSE 0 END`
     ).join(' + ');
 
-    const missingNamesExpr = `TRIM(BOTH ', ' FROM CONCAT(${REQUIRED_DOC_TYPES.map((docType) =>
-        `CASE WHEN SUM(CASE WHEN hs.loai_ho_so = '${docType}' AND ${yearExpr} = ? THEN 1 ELSE 0 END) = 0 THEN '${docType}, ' ELSE '' END`
+    const missingNamesExpr = `TRIM(BOTH ', ' FROM CONCAT(${REQUIRED_DOCUMENT_TYPES.map((docType) =>
+        `CASE WHEN ${missingDocumentAggregate(docType, '?')} THEN '${docType}, ' ELSE '' END`
     ).join(',')}))`;
 
     const sql = `
@@ -89,14 +79,13 @@ const getMissingDocRows = async (connection, year) => {
         LEFT JOIN danh_muc_xa x ON h.xa_id = x.id
         LEFT JOIN vnpt_khu_vuc v ON h.vnpt_khu_vuc_id = v.id
         LEFT JOIN ho_so_dinh_kem hs ON hs.ho_gia_dinh_id = h.id
-        GROUP BY h.id
-        HAVING so_loai_ho_so_thieu > 0
+        GROUP BY h.id, x.id, v.id
+        HAVING (${missingExpr}) > 0
         ORDER BY v.ten_khu_vuc, x.ten_xa, h.ten_chu_ho
     `;
 
     const params = [];
-    for (let i = 0; i < REQUIRED_DOC_TYPES.length; i++) params.push(year);
-    for (let i = 0; i < REQUIRED_DOC_TYPES.length; i++) params.push(year);
+    for (let i = 0; i < ANNUAL_DOCUMENT_TYPES.length * 3; i++) params.push(year);
 
     const [rows] = await connection.query(sql, params);
     return rows || [];
@@ -105,19 +94,10 @@ const getMissingDocRows = async (connection, year) => {
 exports.getDashboard = async (req, res) => {
     try {
         const [totalHo] = await pool.query('SELECT COUNT(*) as total FROM ho_gia_dinh');
-        const [totalXa] = await pool.query('SELECT COUNT(*) as total FROM danh_muc_xa WHERE trang_thai = "dang_hoat_dong"');
+        const [totalXa] = await pool.query("SELECT COUNT(*) as total FROM danh_muc_xa WHERE trang_thai = 'dang_hoat_dong'");
         const [totalThueBao] = await pool.query('SELECT COUNT(*) as total FROM thue_bao_dich_vu');
-        const [namHoSoColumns] = await pool.query("SHOW COLUMNS FROM ho_so_dinh_kem LIKE 'nam_ho_so'");
-        const yearExpr = namHoSoColumns.length > 0 ? 'COALESCE(hs.nam_ho_so, YEAR(hs.created_at))' : 'YEAR(hs.created_at)';
-        const requiredDocTypes = [
-            'giay_chung_nhan_ho_ngheo_can_ngheo',
-            'don_dang_ky_su_dung',
-            'hop_dong_cung_cap_dv',
-            'giay_cccd',
-            'giay_cam_ket'
-        ];
-        const havingCondition = requiredDocTypes
-            .map((docType) => `SUM(CASE WHEN hs.loai_ho_so = '${docType}' AND ${yearExpr} = YEAR(CURDATE()) THEN 1 ELSE 0 END) = 0`)
+        const havingCondition = REQUIRED_DOCUMENT_TYPES
+            .map((docType) => missingDocumentAggregate(docType, 'EXTRACT(YEAR FROM CURRENT_DATE)'))
             .join(' OR ');
         const [thieuHoSo] = await pool.query(`
             SELECT COUNT(*) as total
@@ -133,7 +113,7 @@ exports.getDashboard = async (req, res) => {
             SELECT x.ten_xa, COUNT(h.id) as so_luong
             FROM ho_gia_dinh h
             JOIN danh_muc_xa x ON h.xa_id = x.id
-            GROUP BY h.xa_id
+            GROUP BY h.xa_id, x.ten_xa
             ORDER BY x.ten_xa
         `);
         const [byTrangThai] = await pool.query('SELECT trang_thai_ho, COUNT(*) as so_luong FROM ho_gia_dinh GROUP BY trang_thai_ho');
@@ -141,7 +121,7 @@ exports.getDashboard = async (req, res) => {
             SELECT l.ten_loai, COUNT(h.id) as so_luong
             FROM ho_gia_dinh h
             JOIN loai_doi_tuong l ON h.loai_doi_tuong_id = l.id
-            GROUP BY h.loai_doi_tuong_id
+            GROUP BY h.loai_doi_tuong_id, l.ten_loai
         `);
 
         res.json({
@@ -169,14 +149,14 @@ exports.baoCaoHoGiaDinh = async (req, res) => {
             SELECT x.ten_xa, COUNT(h.id) as so_luong
             FROM ho_gia_dinh h
             JOIN danh_muc_xa x ON h.xa_id = x.id
-            GROUP BY h.xa_id
+            GROUP BY h.xa_id, x.ten_xa
         `);
         const [byTrangThai] = await pool.query('SELECT trang_thai_ho, COUNT(*) as so_luong FROM ho_gia_dinh GROUP BY trang_thai_ho');
         const [byLoai] = await pool.query(`
             SELECT l.ten_loai, COUNT(h.id) as so_luong
             FROM ho_gia_dinh h
             JOIN loai_doi_tuong l ON h.loai_doi_tuong_id = l.id
-            GROUP BY h.loai_doi_tuong_id
+            GROUP BY h.loai_doi_tuong_id, l.ten_loai
         `);
 
         res.json({
@@ -201,14 +181,14 @@ exports.baoCaoThueBao = async (req, res) => {
             SELECT ldv.ten_dich_vu, COUNT(tb.id) as so_luong
             FROM thue_bao_dich_vu tb
             JOIN loai_dich_vu ldv ON tb.loai_dich_vu_id = ldv.id
-            GROUP BY tb.loai_dich_vu_id
+            GROUP BY tb.loai_dich_vu_id, ldv.ten_dich_vu
         `);
         const [byXa] = await pool.query(`
             SELECT x.ten_xa, COUNT(tb.id) as so_luong
             FROM thue_bao_dich_vu tb
             JOIN ho_gia_dinh h ON tb.ho_gia_dinh_id = h.id
             JOIN danh_muc_xa x ON h.xa_id = x.id
-            GROUP BY h.xa_id
+            GROUP BY h.xa_id, x.ten_xa
         `);
 
         res.json({
@@ -289,13 +269,13 @@ exports.baoCaoHoSo = async (req, res) => {
             SELECT COUNT(*) as so_luong
             FROM ho_so_dinh_kem
             WHERE ngay_het_han IS NOT NULL 
-            AND ngay_het_han BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+            AND ngay_het_han BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
         `);
         const [daHetHan] = await pool.query(`
             SELECT COUNT(*) as so_luong
             FROM ho_so_dinh_kem
             WHERE ngay_het_han IS NOT NULL 
-            AND ngay_het_han < CURDATE()
+            AND ngay_het_han < CURRENT_DATE
         `);
 
         res.json({

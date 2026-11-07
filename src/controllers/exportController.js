@@ -3,12 +3,11 @@ const XLSX = require('xlsx');
 const pool = require('../config/database');
 const fs = require('fs');
 const path = require('path');
+const { REQUIRED_DOCUMENT_TYPES, missingDocumentAggregate, householdDocumentStatus } = require('../utils/documentStatus');
 
 exports.exportExcel = async (req, res) => {
     try {
-        const { xa_id, loai_doi_tuong_id, trang_thai_ho, vnpt_khu_vuc_id, search, thieu_ho_so } = req.query;
-        const [namHoSoColumns] = await pool.query("SHOW COLUMNS FROM ho_so_dinh_kem LIKE 'nam_ho_so'");
-        const yearExpr = namHoSoColumns.length > 0 ? 'COALESCE(hs.nam_ho_so, YEAR(hs.created_at))' : 'YEAR(hs.created_at)';
+        const { xa_id, loai_doi_tuong_id, trang_thai_ho, trang_thai_ho_so, vnpt_khu_vuc_id, search, thieu_ho_so } = req.query;
 
         let sql = `
             SELECT
@@ -17,8 +16,8 @@ exports.exportExcel = async (req, res) => {
                    h.so_cmnd,
                    x.ten_xa,
                    l.ten_loai as loai_doi_tuong,
-                     CASE WHEN SUM(CASE WHEN LOWER(COALESCE(ldv.loai_hinh, '')) IN ('di_dong_mat_dat', 'vien_thong_di_dong_mat_dat') OR LOWER(COALESCE(ldv.ma_dich_vu, '')) = 'dmdd' THEN 1 ELSE 0 END) > 0 THEN 'x' ELSE '' END AS dich_vu_di_dong,
-                     CASE WHEN SUM(CASE WHEN LOWER(COALESCE(ldv.loai_hinh, '')) IN ('internet_brcd', 'truy_nhap_internet_brcd_mat_dat', 'brcd') OR LOWER(COALESCE(ldv.ma_dich_vu, '')) = 'ibrcd' THEN 1 ELSE 0 END) > 0 THEN 'x' ELSE '' END AS dich_vu_internet_brcd,
+                     CASE WHEN SUM(CASE WHEN LOWER(TRIM(COALESCE(ldv.loai_hinh, ''))) IN ('di_dong_mat_dat', 'vien_thong_di_dong_mat_dat') OR LOWER(TRIM(COALESCE(ldv.ma_dich_vu, ''))) IN ('dmdd', 'dd') THEN 1 ELSE 0 END) > 0 THEN 'x' ELSE '' END AS dich_vu_di_dong,
+                     CASE WHEN SUM(CASE WHEN LOWER(TRIM(COALESCE(ldv.loai_hinh, ''))) IN ('internet_brcd', 'truy_nhap_internet_brcd_mat_dat', 'brcd') OR LOWER(TRIM(COALESCE(ldv.ma_dich_vu, ''))) IN ('ibrcd', 'br') THEN 1 ELSE 0 END) > 0 THEN 'x' ELSE '' END AS dich_vu_internet_brcd,
                    MAX(tb.so_thue_bao) as so_thue_bao,
                    v.ten_khu_vuc
             FROM ho_gia_dinh h
@@ -35,22 +34,18 @@ exports.exportExcel = async (req, res) => {
         if (xa_id) { sql += ' AND h.xa_id = ?'; params.push(xa_id); }
         if (loai_doi_tuong_id) { sql += ' AND h.loai_doi_tuong_id = ?'; params.push(loai_doi_tuong_id); }
         if (trang_thai_ho) { sql += ' AND h.trang_thai_ho = ?'; params.push(trang_thai_ho); }
+        if (trang_thai_ho_so) { sql += ` AND ${householdDocumentStatus('h')} = ?`; params.push(trang_thai_ho_so); }
         if (vnpt_khu_vuc_id) { sql += ' AND h.vnpt_khu_vuc_id = ?'; params.push(vnpt_khu_vuc_id); }
         if (search) {
-            sql += ' AND (h.ten_chu_ho LIKE ? OR h.so_cmnd LIKE ? OR h.ma_ho LIKE ? OR tb.so_thue_bao LIKE ? OR tb.ten_chu_thue_bao LIKE ?)';
+            sql += ' AND (h.ten_chu_ho ILIKE ? OR h.so_cmnd ILIKE ? OR h.ma_ho ILIKE ? OR tb.so_thue_bao ILIKE ? OR tb.ten_chu_thue_bao ILIKE ?)';
             const s = '%' + search + '%';
             params.push(s, s, s, s, s);
         }
 
-        sql += ' GROUP BY h.id';
+        sql += ' GROUP BY h.id, x.id, l.id, v.id';
 
         if (String(thieu_ho_so || '') === '1') {
-            sql += ` HAVING
-                SUM(CASE WHEN hs.loai_ho_so = 'giay_chung_nhan_ho_ngheo_can_ngheo' AND ${yearExpr} = YEAR(CURDATE()) THEN 1 ELSE 0 END) = 0
-                OR SUM(CASE WHEN hs.loai_ho_so = 'don_dang_ky_su_dung' AND ${yearExpr} = YEAR(CURDATE()) THEN 1 ELSE 0 END) = 0
-                OR SUM(CASE WHEN hs.loai_ho_so = 'hop_dong_cung_cap_dv' AND ${yearExpr} = YEAR(CURDATE()) THEN 1 ELSE 0 END) = 0
-                OR SUM(CASE WHEN hs.loai_ho_so = 'giay_cccd' AND ${yearExpr} = YEAR(CURDATE()) THEN 1 ELSE 0 END) = 0
-                OR SUM(CASE WHEN hs.loai_ho_so = 'giay_cam_ket' AND ${yearExpr} = YEAR(CURDATE()) THEN 1 ELSE 0 END) = 0`;
+            sql += ' HAVING ' + REQUIRED_DOCUMENT_TYPES.map(type => missingDocumentAggregate(type, 'EXTRACT(YEAR FROM CURRENT_DATE)')).join(' OR ');
         }
 
         sql += ' ORDER BY x.ten_xa, h.ten_chu_ho';
