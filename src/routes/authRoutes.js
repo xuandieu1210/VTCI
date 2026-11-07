@@ -3,23 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticate, authorize } = require('../middlewares/auth');
 
-// Import controller
-let authController;
-try {
-    authController = require('../controllers/authController');
-} catch (error) {
-    console.warn('⚠️ authController not found, creating placeholder');
-    authController = {
-        login: (req, res) => res.json({ success: true, message: 'Login placeholder' }),
-        getMe: (req, res) => res.json({ success: true, data: {} }),
-        changePassword: (req, res) => res.json({ success: true, message: 'Changed' }),
-        getUsers: (req, res) => res.json({ success: true, data: [] }),
-        updateUser: (req, res) => res.json({ success: true, message: 'Updated' }),
-        lockUser: (req, res) => res.json({ success: true, message: 'Locked' }),
-        unlockUser: (req, res) => res.json({ success: true, message: 'Unlocked' }),
-        resetUserPassword: (req, res) => res.json({ success: true, message: 'Reset' })
-    };
-}
+const authController = require('../controllers/authController');
 
 // Public routes
 router.post('/login', authController.login);
